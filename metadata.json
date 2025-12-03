@@ -1,0 +1,5 @@
+{
+  "name": "NativeSpeak",
+  "description": "A privacy-first, offline text-to-speech application that runs entirely on your device using native web technologies.",
+  "requestFramePermissions": []
+}
