@@ -27,6 +27,7 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
     );
   }, [voices, filter]);
 
+  // Sync Filter -> Voice
   // Auto-select the first voice when filter changes if current voice doesn't match
   useEffect(() => {
     if (filter === 'all') return;
@@ -41,6 +42,23 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
       onVoiceChange(preferred || filteredVoices[0]);
     }
   }, [filter, filteredVoices, selectedVoice, onVoiceChange]);
+
+  // Sync Voice -> Filter
+  // If the engine auto-switches the voice (e.g. via auto-detect), update the filter UI to match
+  useEffect(() => {
+    if (!selectedVoice) return;
+    
+    const lang = selectedVoice.lang.toLowerCase().replace('_', '-');
+    
+    // If current filter is 'all', we don't strictly need to switch, 
+    // but if the filter is specific (e.g. 'en') and we switched to 'ja', we MUST switch.
+    if (filter !== 'all' && !lang.startsWith(filter)) {
+      if (lang.startsWith('en')) setFilter('en');
+      else if (lang.startsWith('zh')) setFilter('zh');
+      else if (lang.startsWith('ja')) setFilter('ja');
+      else setFilter('all');
+    }
+  }, [selectedVoice, filter]);
 
   return (
     <div className="w-full max-w-md mx-auto mb-4">

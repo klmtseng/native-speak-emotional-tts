@@ -132,7 +132,6 @@ export const useSpeechSynthesis = () => {
     const detectedVoice = detectBestVoiceForText(text, selectedVoice, voices);
     
     if (detectedVoice && detectedVoice !== selectedVoice) {
-      console.log(`Auto-switching voice from ${selectedVoice?.name} to ${detectedVoice.name} based on language detection.`);
       setSelectedVoice(detectedVoice);
       actualVoice = detectedVoice;
     }
@@ -192,7 +191,7 @@ export const useSpeechSynthesis = () => {
       }
 
       utterance.onerror = (event) => {
-        console.error("Speech synthesis error", event);
+        // Error handling without console spam unless critical
         if (index === segments.length - 1) {
              setTtsState(prev => ({ ...prev, isSpeaking: false, isPaused: false }));
         }
