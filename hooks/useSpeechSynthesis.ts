@@ -80,6 +80,44 @@ export const useSpeechSynthesis = () => {
     return segments;
   };
 
+  /**
+   * Detects language from text using Regex.
+   * Order matters: Japanese (Kana) -> Chinese (Hanzi) -> Default (English/Latin)
+   */
+  const detectBestVoiceForText = (text: string, currentVoice: SpeechSynthesisVoice | null, availableVoices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null => {
+    if (availableVoices.length === 0) return currentVoice;
+
+    // 1. Check for Japanese (Hiragana/Katakana)
+    // Range: \u3040-\u309F (Hiragana), \u30A0-\u30FF (Katakana)
+    const hasKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(text);
+    if (hasKana) {
+      // If current voice is not JA, switch
+      if (currentVoice && currentVoice.lang.toLowerCase().includes('ja')) return currentVoice;
+      return availableVoices.find(v => v.lang.toLowerCase().includes('ja')) || currentVoice;
+    }
+
+    // 2. Check for Chinese (Hanzi) - ONLY if no Kana (Japanese also uses Kanji)
+    // Range: \u4E00-\u9FFF (CJK Unified Ideographs)
+    const hasHanzi = /[\u4E00-\u9FFF]/.test(text);
+    if (hasHanzi) {
+      if (currentVoice && (currentVoice.lang.toLowerCase().includes('zh') || currentVoice.lang.toLowerCase().includes('cmn') || currentVoice.lang.toLowerCase().includes('yue'))) return currentVoice;
+      // Prefer Google or standard voices
+      return availableVoices.find(v => v.lang.toLowerCase().includes('zh') || v.lang.toLowerCase().includes('cmn')) || currentVoice;
+    }
+
+    // 3. Fallback / English
+    // If we were in CJK mode but text is purely Latin, maybe switch back to English?
+    // Let's only switch if the current voice is strictly CJK and the text has NO CJK.
+    if (currentVoice && (currentVoice.lang.toLowerCase().includes('zh') || currentVoice.lang.toLowerCase().includes('ja'))) {
+      const hasLatin = /[a-zA-Z]/.test(text);
+      if (hasLatin && !hasHanzi && !hasKana) {
+         return availableVoices.find(v => v.lang.toLowerCase().includes('en')) || currentVoice;
+      }
+    }
+
+    return currentVoice;
+  };
+
   const speak = useCallback((text: string, settings: TTSSettings) => {
     // 1. Reset state
     if (synth.current.speaking) {
@@ -88,6 +126,17 @@ export const useSpeechSynthesis = () => {
     
     if (!text.trim()) return;
 
+    // --- AUTO DETECT & SWITCH VOICE ---
+    // We determine the best voice before parsing segments
+    let actualVoice = selectedVoice;
+    const detectedVoice = detectBestVoiceForText(text, selectedVoice, voices);
+    
+    if (detectedVoice && detectedVoice !== selectedVoice) {
+      console.log(`Auto-switching voice from ${selectedVoice?.name} to ${detectedVoice.name} based on language detection.`);
+      setSelectedVoice(detectedVoice);
+      actualVoice = detectedVoice;
+    }
+
     // 2. Parse text into chunks for "Emotional/Clear" playback
     const segments = parseTextToSegments(text);
 
@@ -95,8 +144,8 @@ export const useSpeechSynthesis = () => {
     segments.forEach((segment, index) => {
       const utterance = new SpeechSynthesisUtterance(segment.text);
       
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
+      if (actualVoice) {
+        utterance.voice = actualVoice;
       }
 
       // Base Settings
@@ -163,7 +212,7 @@ export const useSpeechSynthesis = () => {
       synth.current.speak(utterance);
     });
 
-  }, [selectedVoice]);
+  }, [selectedVoice, voices]);
 
   const pause = useCallback(() => {
     if (synth.current.speaking && !synth.current.paused) {
