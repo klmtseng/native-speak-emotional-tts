@@ -1,10 +1,10 @@
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TTSSettings, TTSState } from '../types';
 
 interface UtteranceSegment {
   text: string;
   offset: number;
-  type: 'statement' | 'question' | 'exclamation' | 'pause';
 }
 
 export const useSpeechSynthesis = () => {
@@ -19,26 +19,34 @@ export const useSpeechSynthesis = () => {
   
   const synth = useRef<SpeechSynthesis>(window.speechSynthesis);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
+  const segmentsRef = useRef<UtteranceSegment[]>([]);
+  
   // Load voices
   useEffect(() => {
-    const updateVoices = () => {
+    const loadVoices = () => {
       const availableVoices = synth.current.getVoices();
-      setVoices(availableVoices);
       
-      if (!selectedVoice && availableVoices.length > 0) {
-        // Try to find a good default voice (Google or Apple enhanced)
-        const defaultVoice = 
-          availableVoices.find(v => v.default) || 
-          availableVoices.find(v => v.name.includes('Google')) ||
-          availableVoices[0];
-        setSelectedVoice(defaultVoice);
+      if (availableVoices.length > 0) {
+        setVoices(availableVoices);
+        
+        if (!selectedVoice) {
+            // Priority: Meijia -> Default -> Local Service -> First available
+            const meijiaVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia'));
+
+            const defaultVoice = 
+                meijiaVoice ||
+                availableVoices.find(v => v.default) || 
+                availableVoices.find(v => v.localService) ||
+                availableVoices[0];
+            setSelectedVoice(defaultVoice);
+        }
       }
     };
 
-    updateVoices();
+    loadVoices();
+    
     if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = updateVoices;
+      speechSynthesis.onvoiceschanged = loadVoices;
     }
 
     return () => {
@@ -48,7 +56,7 @@ export const useSpeechSynthesis = () => {
     };
   }, [selectedVoice]);
 
-  // Cleanup
+  // Lifecycle cleanup
   useEffect(() => {
     return () => {
       synth.current.cancel();
@@ -56,160 +64,159 @@ export const useSpeechSynthesis = () => {
   }, []);
 
   /**
-   * Splits text into meaningful segments to allow the engine to pause/breathe.
-   * Also identifies the "tone" of the segment.
+   * Helper: Parse text.
+   * FIX: Filter out segments that are just punctuation to prevent TTS engine stalling.
    */
   const parseTextToSegments = (fullText: string): UtteranceSegment[] => {
     const segments: UtteranceSegment[] = [];
-    // Regex matches sentence chunks including their delimiters
-    // Covers English (.!?) and CJK (。！？) and newlines
-    const regex = /([^.!?。！？\n\r]+[.!?。！？\n\r]+)|([^.!?。！？\n\r]+$)/g;
+    // Split by major punctuation but capture it
+    const regex = /([^.!?。！？\n\r]+[.!?。！？\n\r]*)|([.!?。！？\n\r]+)/g;
     
     let match;
     while ((match = regex.exec(fullText)) !== null) {
       const text = match[0];
-      const offset = match.index;
       
-      let type: UtteranceSegment['type'] = 'statement';
-      if (text.match(/[?？]/)) type = 'question';
-      else if (text.match(/[!！]/)) type = 'exclamation';
-      
-      segments.push({ text, offset, type });
+      // CRITICAL FIX: Only add segments that contain at least one alphanumeric or CJK character.
+      // Pure punctuation segments (like "...") often fail to trigger 'onend' events in some browsers.
+      // We check for letters, numbers, or non-ascii characters (like CJK).
+      const hasContent = /[a-zA-Z0-9\u00C0-\u00FF\u3000-\u9FFF]/.test(text);
+
+      if (hasContent) {
+        segments.push({ text, offset: match.index });
+      }
+    }
+    
+    // Fallback
+    if (segments.length === 0 && fullText.trim().length > 0) {
+      segments.push({ text: fullText, offset: 0 });
     }
     
     return segments;
   };
 
   /**
-   * Detects language from text using Regex.
-   * Order matters: Japanese (Kana) -> Chinese (Hanzi) -> Default (English/Latin)
+   * Helper: Detect Language
    */
   const detectBestVoiceForText = (text: string, currentVoice: SpeechSynthesisVoice | null, availableVoices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null => {
     if (availableVoices.length === 0) return currentVoice;
+    
+    const sample = text.slice(0, 100);
 
-    // 1. Check for Japanese (Hiragana/Katakana)
-    // Range: \u3040-\u309F (Hiragana), \u30A0-\u30FF (Katakana)
-    const hasKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(text);
-    if (hasKana) {
-      // If current voice is not JA, switch
-      if (currentVoice && currentVoice.lang.toLowerCase().includes('ja')) return currentVoice;
-      return availableVoices.find(v => v.lang.toLowerCase().includes('ja')) || currentVoice;
+    // 1. Japanese
+    if (/[\u3040-\u309F\u30A0-\u30FF]/.test(sample)) {
+       if (currentVoice?.lang.includes('ja')) return currentVoice;
+       return availableVoices.find(v => v.lang.includes('ja')) || currentVoice;
     }
 
-    // 2. Check for Chinese (Hanzi) - ONLY if no Kana (Japanese also uses Kanji)
-    // Range: \u4E00-\u9FFF (CJK Unified Ideographs)
-    const hasHanzi = /[\u4E00-\u9FFF]/.test(text);
-    if (hasHanzi) {
-      if (currentVoice && (currentVoice.lang.toLowerCase().includes('zh') || currentVoice.lang.toLowerCase().includes('cmn') || currentVoice.lang.toLowerCase().includes('yue'))) return currentVoice;
-      // Prefer Google or standard voices
-      return availableVoices.find(v => v.lang.toLowerCase().includes('zh') || v.lang.toLowerCase().includes('cmn')) || currentVoice;
-    }
+    // 2. Chinese
+    if (/[\u4E00-\u9FFF]/.test(sample)) {
+        if (currentVoice?.lang.includes('zh') || currentVoice?.lang.includes('cmn')) return currentVoice;
+        
+        // If current voice is not Chinese, try to find Meijia first for Chinese text
+        const meijia = availableVoices.find(v => v.name.toLowerCase().includes('meijia'));
+        if (meijia) return meijia;
 
-    // 3. Fallback / English
-    // If we were in CJK mode but text is purely Latin, maybe switch back to English?
-    // Let's only switch if the current voice is strictly CJK and the text has NO CJK.
-    if (currentVoice && (currentVoice.lang.toLowerCase().includes('zh') || currentVoice.lang.toLowerCase().includes('ja'))) {
-      const hasLatin = /[a-zA-Z]/.test(text);
-      if (hasLatin && !hasHanzi && !hasKana) {
-         return availableVoices.find(v => v.lang.toLowerCase().includes('en')) || currentVoice;
-      }
+        return availableVoices.find(v => v.lang.includes('zh') || v.lang.includes('cmn')) || currentVoice;
     }
 
     return currentVoice;
   };
 
-  const speak = useCallback((text: string, settings: TTSSettings) => {
-    // 1. Reset state
-    if (synth.current.speaking) {
-      synth.current.cancel();
+  /**
+   * Play Segment
+   */
+  const playSegment = (index: number, settings: TTSSettings, voice: SpeechSynthesisVoice | null) => {
+    // End of queue check
+    if (index >= segmentsRef.current.length) {
+      setTtsState(prev => ({ ...prev, isSpeaking: false, isPaused: false, charIndex: -1 }));
+      activeUtteranceRef.current = null;
+      return;
     }
+
+    const segment = segmentsRef.current[index];
+    const utterance = new SpeechSynthesisUtterance(segment.text);
+
+    // Voice & Lang
+    if (voice) {
+      utterance.voice = voice;
+      // Some browsers require explicit lang matching
+      utterance.lang = voice.lang; 
+    }
+
+    // Settings
+    // FIX: Removed dynamic pitch/rate adjustments based on punctuation.
+    // Some engines (Samsung/iOS) crash or go silent if pitch is modified per-sentence.
+    utterance.rate = settings.rate;
+    utterance.pitch = settings.pitch;
+    utterance.volume = settings.volume;
+
+    // Events
+    utterance.onstart = () => {
+      setTtsState(prev => ({ 
+        ...prev, 
+        isSpeaking: true, 
+        isPaused: false,
+        charIndex: segment.offset 
+      }));
+    };
+
+    utterance.onboundary = (event) => {
+      if (event.name === 'word') {
+         const globalIndex = segment.offset + event.charIndex;
+         setTtsState(prev => ({ ...prev, charIndex: globalIndex }));
+      }
+    };
+
+    const playNext = () => {
+        // Ensure we only proceed if this was the active utterance
+        if (activeUtteranceRef.current === utterance) {
+            playSegment(index + 1, settings, voice);
+        }
+    };
+
+    utterance.onend = () => {
+      // 0ms delay to clear call stack but keep it snappy
+      setTimeout(playNext, 0); 
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("TTS Segment Error:", e);
+      // Attempt to recover by skipping to next
+      setTimeout(playNext, 0);
+    };
+
+    // FIX for Safari/iOS:
+    // Explicitly attach to window object to prevent Garbage Collection during playback.
+    // Using a typed property on window would require type merging, so we cast to any.
+    (window as any)._activeTTSUtterance = utterance;
+    activeUtteranceRef.current = utterance;
+    
+    synth.current.speak(utterance);
+  };
+
+  const speak = useCallback((text: string, settings: TTSSettings) => {
+    synth.current.cancel();
     
     if (!text.trim()) return;
 
-    // --- AUTO DETECT & SWITCH VOICE ---
-    // We determine the best voice before parsing segments
-    let actualVoice = selectedVoice;
-    const detectedVoice = detectBestVoiceForText(text, selectedVoice, voices);
+    // Get fresh voices
+    const currentVoices = voices.length > 0 ? voices : synth.current.getVoices();
+    let targetVoice = selectedVoice;
     
-    if (detectedVoice && detectedVoice !== selectedVoice) {
-      setSelectedVoice(detectedVoice);
-      actualVoice = detectedVoice;
+    // Auto-detection
+    const bestVoice = detectBestVoiceForText(text, selectedVoice, currentVoices);
+    if (bestVoice && bestVoice !== selectedVoice) {
+        setSelectedVoice(bestVoice);
+        targetVoice = bestVoice;
     }
 
-    // 2. Parse text into chunks for "Emotional/Clear" playback
-    const segments = parseTextToSegments(text);
-
-    // 3. Queue each segment
-    segments.forEach((segment, index) => {
-      const utterance = new SpeechSynthesisUtterance(segment.text);
-      
-      if (actualVoice) {
-        utterance.voice = actualVoice;
-      }
-
-      // Base Settings
-      let segmentRate = settings.rate;
-      let segmentPitch = settings.pitch;
-
-      // --- EMOTIONAL HEURISTICS ---
-      // Apply subtle adjustments based on punctuation to simulate emotion
-      if (segment.type === 'question') {
-        // Slightly higher pitch for questions, slightly slower
-        segmentPitch = Math.min(2, settings.pitch * 1.05); 
-        segmentRate = Math.max(0.1, settings.rate * 0.95);
-      } else if (segment.type === 'exclamation') {
-        // Slightly faster and very slightly higher pitch for excitement
-        segmentRate = Math.min(10, settings.rate * 1.05);
-        segmentPitch = Math.min(2, settings.pitch * 1.05); 
-      } else {
-        // Statements: Allow pitch to drop slightly for a "grounded" feel
-        segmentPitch = settings.pitch;
-      }
-
-      utterance.rate = segmentRate;
-      utterance.pitch = segmentPitch;
-      utterance.volume = settings.volume;
-
-      // --- EVENTS ---
-      utterance.onstart = () => {
-        setTtsState(prev => ({ ...prev, isSpeaking: true, isPaused: false }));
-        activeUtteranceRef.current = utterance;
-      };
-
-      // We only care about global end if this is the last segment
-      if (index === segments.length - 1) {
-        utterance.onend = () => {
-          setTtsState(prev => ({ 
-            ...prev, 
-            isSpeaking: false, 
-            isPaused: false, 
-            charIndex: -1, 
-            currentWord: '' 
-          }));
-          activeUtteranceRef.current = null;
-        };
-      }
-
-      utterance.onerror = (event) => {
-        // Error handling without console spam unless critical
-        if (index === segments.length - 1) {
-             setTtsState(prev => ({ ...prev, isSpeaking: false, isPaused: false }));
-        }
-      };
-
-      // Correctly map the local character index to the global text index
-      utterance.onboundary = (event) => {
-        if (event.name === 'word') {
-           const globalIndex = segment.offset + event.charIndex;
-           setTtsState(prev => ({ 
-             ...prev, 
-             charIndex: globalIndex 
-           }));
-        }
-      };
-
-      synth.current.speak(utterance);
-    });
+    // Parse
+    segmentsRef.current = parseTextToSegments(text);
+    
+    // Start
+    if (segmentsRef.current.length > 0) {
+        playSegment(0, settings, targetVoice);
+    }
 
   }, [selectedVoice, voices]);
 
@@ -229,6 +236,9 @@ export const useSpeechSynthesis = () => {
 
   const cancel = useCallback(() => {
     synth.current.cancel();
+    activeUtteranceRef.current = null;
+    (window as any)._activeTTSUtterance = null;
+    segmentsRef.current = [];
     setTtsState({
       isSpeaking: false,
       isPaused: false,

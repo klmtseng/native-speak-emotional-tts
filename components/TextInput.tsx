@@ -1,4 +1,6 @@
+
 import React, { useRef, useEffect } from 'react';
+import { DEFAULT_TEXT } from '../constants';
 
 interface TextInputProps {
   text: string;
@@ -15,6 +17,13 @@ const TextInput: React.FC<TextInputProps> = ({ text, setText, charIndex, isSpeak
   const handleScroll = () => {
     if (textAreaRef.current && overlayRef.current) {
       overlayRef.current.scrollTop = textAreaRef.current.scrollTop;
+    }
+  };
+
+  // Auto-clear default text on focus
+  const handleFocus = () => {
+    if (text === DEFAULT_TEXT) {
+      setText('');
     }
   };
 
@@ -59,6 +68,7 @@ const TextInput: React.FC<TextInputProps> = ({ text, setText, charIndex, isSpeak
         value={text}
         onChange={(e) => setText(e.target.value)}
         onScroll={handleScroll}
+        onFocus={handleFocus}
         className="absolute inset-0 w-full h-full p-6 bg-transparent text-lg md:text-xl font-light text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:ring-0 leading-relaxed font-sans z-10"
         placeholder="Type or paste something here to listen..."
         spellCheck="false"
