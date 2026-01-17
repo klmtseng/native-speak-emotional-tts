@@ -24,19 +24,26 @@ const App: React.FC = () => {
     ttsState
   } = useSpeechSynthesis();
 
-  const handlePlay = () => {
-    if (ttsState.isPaused) {
-      resume();
-    } else if (ttsState.isSpeaking) {
-        // Already speaking, do nothing or restart? Let's restart if clicked again
-        speak(text, settings);
+  // Unified Toggle Logic: Handles Start, Pause, and Resume in one place
+  const handleTogglePlay = () => {
+    if (ttsState.isSpeaking) {
+      if (ttsState.isPaused) {
+        // Case 1: Currently Paused -> Resume
+        resume();
+      } else {
+        // Case 2: Currently Speaking -> Pause
+        pause();
+      }
     } else {
-      speak(text, settings);
+      // Case 3: Stopped/Idle -> Start Speaking
+      if (text.trim()) {
+        speak(text, settings);
+      }
     }
   };
 
   const handleClear = () => {
-    cancel(); // Stop audio if playing
+    cancel(); // Stop audio immediately
     setText(''); // Clear text
   };
 
@@ -111,10 +118,12 @@ const App: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background/95 to-transparent z-50">
         <div className="max-w-md mx-auto flex items-center justify-center">
           
-          {/* Play/Pause Main Button - Centered */}
+          {/* Play/Pause Toggle Button */}
           <button
-            onClick={ttsState.isSpeaking && !ttsState.isPaused ? pause : handlePlay}
-            className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white shadow-xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 active:scale-95 transition-all duration-300 group"
+            onClick={handleTogglePlay}
+            disabled={!text.trim() && !ttsState.isSpeaking} 
+            className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white shadow-xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 active:scale-95 transition-all duration-300 group disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label={ttsState.isSpeaking && !ttsState.isPaused ? "Pause" : "Play"}
           >
             {ttsState.isSpeaking && !ttsState.isPaused ? (
               <Pause size={32} fill="currentColor" className="group-hover:rotate-90 transition-transform duration-300" />
