@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Play, Pause, Square, Settings, Sparkles, Mic2 } from 'lucide-react';
+import { Play, Pause, Settings, Mic2, Trash2 } from 'lucide-react';
 import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
 import VoiceSelector from './components/VoiceSelector';
 import SettingsPanel from './components/SettingsPanel';
@@ -34,6 +35,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleClear = () => {
+    cancel(); // Stop audio if playing
+    setText(''); // Clear text
+  };
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-background via-background to-slate-900">
       {/* Header */}
@@ -47,12 +53,25 @@ const App: React.FC = () => {
             <p className="text-xs text-gray-400 font-medium">On-Device Processing</p>
           </div>
         </div>
-        <button 
-          onClick={() => setShowSettings(!showSettings)}
-          className={`p-3 rounded-full transition-all duration-300 ${showSettings ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-        >
-          <Settings size={22} />
-        </button>
+        
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleClear}
+            className="p-3 rounded-full transition-all duration-300 text-gray-400 hover:text-red-400 hover:bg-white/5"
+            aria-label="Clear Text"
+            title="Clear Text"
+          >
+            <Trash2 size={22} />
+          </button>
+          
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-3 rounded-full transition-all duration-300 ${showSettings ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+            aria-label="Settings"
+          >
+            <Settings size={22} />
+          </button>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -90,18 +109,9 @@ const App: React.FC = () => {
 
       {/* Fixed Bottom Controls */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-background via-background/95 to-transparent z-50">
-        <div className="max-w-md mx-auto flex items-center justify-center gap-6 md:gap-8">
+        <div className="max-w-md mx-auto flex items-center justify-center">
           
-          {/* Stop Button */}
-          <button
-            onClick={cancel}
-            disabled={!ttsState.isSpeaking && !ttsState.isPaused}
-            className="p-4 rounded-full text-gray-400 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
-          >
-            <Square size={24} fill="currentColor" />
-          </button>
-
-          {/* Play/Pause Main Button */}
+          {/* Play/Pause Main Button - Centered */}
           <button
             onClick={ttsState.isSpeaking && !ttsState.isPaused ? pause : handlePlay}
             className="w-20 h-20 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-white shadow-xl shadow-primary/30 hover:shadow-primary/50 hover:scale-105 active:scale-95 transition-all duration-300 group"
@@ -113,14 +123,6 @@ const App: React.FC = () => {
             )}
           </button>
 
-          {/* Clear Text Button (Contextual) */}
-          <button
-            onClick={() => setText('')}
-            className="p-4 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-all"
-            title="Clear Text"
-          >
-            <Sparkles size={24} />
-          </button>
         </div>
         
         {/* Safe Area for iOS Home Indicator */}
