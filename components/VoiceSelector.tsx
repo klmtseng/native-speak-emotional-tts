@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, Globe } from 'lucide-react';
+import { ChevronDown, Globe, AlertCircle } from 'lucide-react';
 
 interface VoiceSelectorProps {
   voices: SpeechSynthesisVoice[];
@@ -19,6 +19,18 @@ const FILTERS: { id: LangFilter; label: string; flag: string }[] = [
 
 const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, onVoiceChange }) => {
   const [filter, setFilter] = useState<LangFilter>('all');
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Set loaded state once voices are detected to differentiate between "loading" and "no voices found"
+  useEffect(() => {
+    if (voices.length > 0) {
+      setIsLoaded(true);
+    } else {
+      // Set a timeout to assume loaded (but empty) if it takes too long
+      const timer = setTimeout(() => setIsLoaded(true), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [voices]);
 
   // Filter voices based on language code (BCP 47 tag)
   const filteredVoices = useMemo(() => {
@@ -29,7 +41,6 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
   }, [voices, filter]);
 
   // Sync Voice -> Filter
-  // If the engine auto-switches the voice (e.g. via auto-detect), update the filter UI to match
   useEffect(() => {
     if (!selectedVoice) return;
     
@@ -42,7 +53,7 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
       else if (lang.startsWith('ja')) setFilter('ja');
       else setFilter('all');
     }
-  }, [selectedVoice]); // Removed 'filter' dependency to avoid circular loops
+  }, [selectedVoice]);
 
   return (
     <div className="w-full max-w-md mx-auto mb-4">
@@ -77,19 +88,33 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
       {/* Voice Dropdown */}
       <div className="relative group">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Globe className={`h-5 w-5 transition-colors ${selectedVoice ? 'text-indigo-400' : 'text-gray-500'}`} />
+          {voices.length === 0 && isLoaded ? (
+             <AlertCircle className="h-5 w-5 text-red-400" />
+          ) : (
+             <Globe className={`h-5 w-5 transition-colors ${selectedVoice ? 'text-indigo-400' : 'text-gray-500'}`} />
+          )}
         </div>
+        
         <select
           value={selectedVoice?.voiceURI || ''}
           onChange={(e) => {
             const voice = voices.find(v => v.voiceURI === e.target.value);
             if (voice) onVoiceChange(voice);
           }}
-          className="block w-full pl-10 pr-10 py-3 text-base border-none rounded-2xl bg-surface text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary shadow-lg appearance-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-ellipsis overflow-hidden"
+          disabled={voices.length === 0}
+          className={`
+            block w-full pl-10 pr-10 py-3 text-base border-none rounded-2xl bg-surface text-white 
+            placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary shadow-lg appearance-none 
+            transition-colors cursor-pointer text-ellipsis overflow-hidden
+            ${voices.length === 0 && isLoaded ? 'border border-red-500/30 text-red-200 bg-red-900/10' : ''}
+            disabled:opacity-70 disabled:cursor-not-allowed
+          `}
           aria-label="Select Voice"
         >
-          {voices.length === 0 ? (
+          {!isLoaded && voices.length === 0 ? (
             <option>Loading voices...</option>
+          ) : voices.length === 0 ? (
+            <option>No voices found (Check OS Settings)</option>
           ) : filteredVoices.length === 0 ? (
             <option>No voices found for this filter</option>
           ) : (
@@ -100,10 +125,22 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
             ))
           )}
         </select>
+        
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
           <ChevronDown className="h-5 w-5 text-gray-400" />
         </div>
       </div>
+      
+      {/* Helper text for Linux users specifically if no voices found */}
+      {isLoaded && voices.length === 0 && (
+        <div className="mt-2 px-2 text-xs text-red-300 flex items-start gap-1.5">
+           <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+           <p>
+             No voices detected. If you are on <strong>Linux</strong>, please install `speech-dispatcher` or `espeak`. 
+             On other platforms, ensure TTS is enabled in system settings.
+           </p>
+        </div>
+      )}
     </div>
   );
 };
