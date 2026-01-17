@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDown, Globe } from 'lucide-react';
 
@@ -27,22 +28,6 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
     );
   }, [voices, filter]);
 
-  // Sync Filter -> Voice
-  // Auto-select the first voice when filter changes if current voice doesn't match
-  useEffect(() => {
-    if (filter === 'all') return;
-    
-    const isCurrentVoiceValid = selectedVoice && selectedVoice.lang.toLowerCase().replace('_', '-').startsWith(filter);
-    
-    if (!isCurrentVoiceValid && filteredVoices.length > 0) {
-      // Prefer Google or Microsoft voices if available as they often sound better
-      const preferred = filteredVoices.find(v => 
-        v.name.includes('Google') || v.name.includes('Siri') || v.name.includes('Enhanced')
-      );
-      onVoiceChange(preferred || filteredVoices[0]);
-    }
-  }, [filter, filteredVoices, selectedVoice, onVoiceChange]);
-
   // Sync Voice -> Filter
   // If the engine auto-switches the voice (e.g. via auto-detect), update the filter UI to match
   useEffect(() => {
@@ -50,15 +35,14 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
     
     const lang = selectedVoice.lang.toLowerCase().replace('_', '-');
     
-    // If current filter is 'all', we don't strictly need to switch, 
-    // but if the filter is specific (e.g. 'en') and we switched to 'ja', we MUST switch.
+    // Only switch if the current filter hides the selected voice
     if (filter !== 'all' && !lang.startsWith(filter)) {
       if (lang.startsWith('en')) setFilter('en');
       else if (lang.startsWith('zh')) setFilter('zh');
       else if (lang.startsWith('ja')) setFilter('ja');
       else setFilter('all');
     }
-  }, [selectedVoice, filter]);
+  }, [selectedVoice]); // Removed 'filter' dependency to avoid circular loops
 
   return (
     <div className="w-full max-w-md mx-auto mb-4">
@@ -101,12 +85,13 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
             const voice = voices.find(v => v.voiceURI === e.target.value);
             if (voice) onVoiceChange(voice);
           }}
-          disabled={filteredVoices.length === 0}
           className="block w-full pl-10 pr-10 py-3 text-base border-none rounded-2xl bg-surface text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary shadow-lg appearance-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-ellipsis overflow-hidden"
           aria-label="Select Voice"
         >
-          {filteredVoices.length === 0 ? (
-            <option>No voices found for this language</option>
+          {voices.length === 0 ? (
+            <option>Loading voices...</option>
+          ) : filteredVoices.length === 0 ? (
+            <option>No voices found for this filter</option>
           ) : (
             filteredVoices.map((voice) => (
               <option key={voice.voiceURI} value={voice.voiceURI}>
@@ -119,15 +104,6 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
           <ChevronDown className="h-5 w-5 text-gray-400" />
         </div>
       </div>
-      
-      {/* Mobile Hint */}
-      {selectedVoice && (
-        <div className="mt-2 flex items-center justify-end gap-2 text-xs text-gray-500 px-2">
-           <span>{selectedVoice.lang}</span>
-           <span>•</span>
-           <span>{selectedVoice.localService ? 'On-Device' : 'Network'}</span>
-        </div>
-      )}
     </div>
   );
 };
