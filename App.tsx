@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Play, Pause, Settings, Mic2, Trash2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Play, Pause, Settings, Mic2, Trash2, Upload } from 'lucide-react';
 import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
 import VoiceSelector from './components/VoiceSelector';
 import SettingsPanel from './components/SettingsPanel';
@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [text, setText] = useState<string>(DEFAULT_TEXT);
   const [showSettings, setShowSettings] = useState<boolean>(false);
   const [settings, setSettings] = useState<TTSSettings>(DEFAULT_SETTINGS);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const {
     voices,
@@ -47,6 +48,28 @@ const App: React.FC = () => {
     setText(''); // Clear text
   };
 
+  const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target?.result as string;
+      if (content) {
+        cancel(); // Stop any current speech
+        setText(content);
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input value to allow selecting the same file again if needed
+    event.target.value = '';
+  };
+
+  const triggerFileImport = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-background via-background to-slate-900">
       {/* Header */}
@@ -62,6 +85,24 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Hidden File Input */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileImport} 
+            accept=".txt,text/plain" 
+            className="hidden" 
+          />
+
+          <button 
+            onClick={triggerFileImport}
+            className="p-3 rounded-full transition-all duration-300 text-gray-400 hover:text-blue-400 hover:bg-white/5"
+            aria-label="Import Text File"
+            title="Import .txt file"
+          >
+            <Upload size={22} />
+          </button>
+
           <button 
             onClick={handleClear}
             className="p-3 rounded-full transition-all duration-300 text-gray-400 hover:text-red-400 hover:bg-white/5"
