@@ -1,13 +1,27 @@
 
 import React from 'react';
-import { X, GitCommit, CheckCircle2 } from 'lucide-react';
+import { X, GitCommit, CheckCircle2, Upload, History, Trash2, FileText } from 'lucide-react';
+
+interface ControlGuide {
+  icon: React.ReactNode;
+  label: string;
+  desc: string;
+}
+
+interface UpdateEntry {
+  version: string;
+  date: string;
+  title: string;
+  features: string[];
+  controls?: ControlGuide[];
+}
 
 interface ChangelogModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-const UPDATES = [
+const UPDATES: UpdateEntry[] = [
   {
     version: 'v1.3.0',
     date: 'Current Version',
@@ -16,6 +30,23 @@ const UPDATES = [
       'Added Drag and Drop file support for the text area.',
       'Added visual overlay when hovering files over the app.',
       'Refactored file reading logic for better performance.',
+    ],
+    controls: [
+      { 
+        icon: <Upload size={18} />, 
+        label: 'Import / Drag & Drop', 
+        desc: 'Support .txt, .md, .srt files' 
+      },
+      { 
+        icon: <History size={18} />, 
+        label: 'Version History', 
+        desc: 'View development log' 
+      },
+      { 
+        icon: <Trash2 size={18} />, 
+        label: 'Reset', 
+        desc: 'Clear text and stop audio' 
+      }
     ]
   },
   {
@@ -98,6 +129,24 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
                 </div>
                 <h3 className="text-lg font-semibold text-white">{update.title}</h3>
               </div>
+
+              {/* Icon Guide (New Feature) */}
+              {update.controls && (
+                <div className="grid grid-cols-1 gap-2 mb-4 bg-white/5 rounded-xl p-3 border border-white/5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 px-1">Interface Guide</p>
+                  {update.controls.map((ctrl, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
+                      <div className="p-2 bg-slate-800 rounded-lg text-primary shadow-sm border border-white/5">
+                        {ctrl.icon}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-200">{ctrl.label}</span>
+                        <span className="text-xs text-gray-500">{ctrl.desc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <ul className="space-y-2 mt-3">
                 {update.features.map((feature, i) => (
