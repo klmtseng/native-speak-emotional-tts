@@ -7,6 +7,8 @@ interface UtteranceSegment {
   offset: number;
 }
 
+type LangType = 'ja' | 'zh' | 'en' | 'neutral';
+
 export const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
@@ -64,30 +66,16 @@ export const useSpeechSynthesis = () => {
   }, []);
 
   /**
-   * Enhanced Language Detection for a specific string
+   * Determine language category for a text segment
    */
-  const getBestVoiceForSegment = (text: string): SpeechSynthesisVoice | null => {
-    const availableVoices = voices.length > 0 ? voices : synth.current.getVoices();
-    
-    // 1. Detect Japanese (Hiragana/Katakana)
-    if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) {
-       return availableVoices.find(v => v.lang.startsWith('ja')) || userPreferredVoiceRef.current;
-    }
-
-    // 2. Detect Chinese (Hanzi) - focusing on segments that DON'T have Kana
-    if (/[\u4E00-\u9FFF]/.test(text)) {
-        const zhVoice = availableVoices.find(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn'));
-        // Try to find a high-quality Chinese voice like Meijia if possible
-        const meijia = availableVoices.find(v => v.name.toLowerCase().includes('meijia') && v.lang.startsWith('zh'));
-        return meijia || zhVoice || userPreferredVoiceRef.current;
-    }
-
-    // 3. Detect English
-    if (/[a-zA-Z]/.test(text)) {
-        return availableVoices.find(v => v.lang.startsWith('en')) || userPreferredVoiceRef.current;
-    }
-
-    return userPreferredVoiceRef.current;
+  const getSegmentLang = (text: string): LangType => {
+     // Hiragana/Katakana -> Japanese
+     if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
+     // Hanzi -> Chinese (simplification: if mixed with Kana, previous rule catches it)
+     if (/[\u4E00-\u9FFF]/.test(text)) return 'zh';
+     // Latin -> English
+     if (/[a-zA-Z]/.test(text)) return 'en';
+     return 'neutral';
   };
 
   /**
@@ -95,16 +83,50 @@ export const useSpeechSynthesis = () => {
    */
   const parseTextToSegments = (fullText: string): UtteranceSegment[] => {
     const segments: UtteranceSegment[] = [];
-    // Split by sentence endings and preserve them
-    const regex = /([^.!?。！？\n\r]+[.!?。！？\n\r]*)|([.!?。！？\n\r]+)/g;
+    // 1. Coarse split by sentence endings (preserve delimiters)
+    const sentenceRegex = /([^.!?。！？\n\r]+[.!?。！？\n\r]*)|([.!?。！？\n\r]+)/g;
     
     let match;
-    while ((match = regex.exec(fullText)) !== null) {
-      const text = match[0];
-      const hasContent = /[a-zA-Z0-9\u00C0-\u00FF\u3000-\u9FFF\u3040-\u309F\u30A0-\u30FF]/.test(text);
+    while ((match = sentenceRegex.exec(fullText)) !== null) {
+      const sentence = match[0];
+      const sentenceOffset = match.index;
 
-      if (hasContent) {
-        segments.push({ text, offset: match.index });
+      // Check for mixed content (Latin vs CJK)
+      const hasCJK = /[\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]/.test(sentence);
+      const hasLatin = /[a-zA-Z]/.test(sentence);
+
+      // 2. Intra-sentence splitting if mixed languages detected
+      if (hasCJK && hasLatin) {
+         // Regex to isolate CJK blocks (including full-width punctuation)
+         const cjkRegex = /([\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uFF00-\uFFEF]+)/g;
+         
+         let lastIndex = 0;
+         let subMatch;
+
+         while ((subMatch = cjkRegex.exec(sentence)) !== null) {
+            // Push preceding non-CJK text (e.g., "3. Privacy First (")
+            const nonCjkText = sentence.substring(lastIndex, subMatch.index);
+            if (nonCjkText) { 
+               segments.push({ text: nonCjkText, offset: sentenceOffset + lastIndex });
+            }
+
+            // Push CJK text (e.g., "隱私優先")
+            segments.push({ text: subMatch[0], offset: sentenceOffset + subMatch.index });
+            
+            lastIndex = cjkRegex.lastIndex;
+         }
+
+         // Push remaining text (e.g., ")")
+         const remaining = sentence.substring(lastIndex);
+         if (remaining) {
+            segments.push({ text: remaining, offset: sentenceOffset + lastIndex });
+         }
+
+      } else {
+        // Simple sentence (all English, all CJK, or Neutral like "3.")
+        if (sentence.trim()) {
+          segments.push({ text: sentence, offset: sentenceOffset });
+        }
       }
     }
     
@@ -116,7 +138,7 @@ export const useSpeechSynthesis = () => {
   };
 
   /**
-   * Play Segment with per-segment voice detection
+   * Play Segment with contextual voice detection
    */
   const playSegment = (index: number, settings: TTSSettings) => {
     if (index >= segmentsRef.current.length) {
@@ -127,13 +149,68 @@ export const useSpeechSynthesis = () => {
 
     const segment = segmentsRef.current[index];
     
-    // CRITICAL FIX: Detect the best voice for THIS specific segment
-    const segmentVoice = getBestVoiceForSegment(segment.text);
+    // 1. Identify Language Type with Finite Context Lookahead/Lookbehind
+    let langType = getSegmentLang(segment.text);
     
+    // Contextual Resolver for Neutral segments (e.g. "3.", "123", "...")
+    if (langType === 'neutral') {
+        let foundLang: LangType = 'neutral';
+        
+        // Priority 1: Look ahead 1 step
+        if (index + 1 < segmentsRef.current.length) {
+            const next = getSegmentLang(segmentsRef.current[index + 1].text);
+            if (next !== 'neutral') foundLang = next;
+        }
+        
+        // Priority 2: Look ahead 2 steps
+        if (foundLang === 'neutral' && index + 2 < segmentsRef.current.length) {
+             const next2 = getSegmentLang(segmentsRef.current[index + 2].text);
+             if (next2 !== 'neutral') foundLang = next2;
+        }
+
+        // Priority 3: Look behind 1 step
+        if (foundLang === 'neutral' && index - 1 >= 0) {
+             const prev = getSegmentLang(segmentsRef.current[index - 1].text);
+             if (prev !== 'neutral') foundLang = prev;
+        }
+
+        // Priority 4: Look behind 2 steps
+        if (foundLang === 'neutral' && index - 2 >= 0) {
+             const prev2 = getSegmentLang(segmentsRef.current[index - 2].text);
+             if (prev2 !== 'neutral') foundLang = prev2;
+        }
+        
+        if (foundLang !== 'neutral') {
+            langType = foundLang;
+        }
+        // If still neutral, it falls back to default voice (no break/return here)
+    }
+
+    // 2. Select Voice based on Resolved LangType
+    const availableVoices = voices.length > 0 ? voices : synth.current.getVoices();
+    let targetVoice: SpeechSynthesisVoice | undefined;
+
+    switch (langType) {
+        case 'ja':
+            targetVoice = availableVoices.find(v => v.lang.startsWith('ja'));
+            break;
+        case 'zh':
+            // Prioritize high-quality voices like Meijia if available
+            targetVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia') && v.lang.startsWith('zh')) 
+                          || availableVoices.find(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn'));
+            break;
+        case 'en':
+            targetVoice = availableVoices.find(v => v.lang.startsWith('en'));
+            break;
+    }
+    
+    // 3. Fallback to user preference
+    const finalVoice = targetVoice || userPreferredVoiceRef.current;
+
     const utterance = new SpeechSynthesisUtterance(segment.text);
-    if (segmentVoice) {
-      utterance.voice = segmentVoice;
-      utterance.lang = segmentVoice.lang; 
+    if (finalVoice) {
+      utterance.voice = finalVoice;
+      utterance.lang = finalVoice.lang; 
     }
 
     utterance.rate = settings.rate;
@@ -144,7 +221,7 @@ export const useSpeechSynthesis = () => {
       setTtsState(prev => ({ 
         ...prev, 
         isSpeaking: true, 
-        isPaused: false,
+        isPaused: false, 
         charIndex: segment.offset 
       }));
     };
