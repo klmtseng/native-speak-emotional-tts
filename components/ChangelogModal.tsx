@@ -24,12 +24,13 @@ interface ChangelogModalProps {
 const UPDATES: UpdateEntry[] = [
   {
     version: 'v1.3.1',
-    date: '2025-05-20',
+    date: '2026-01-19',
     title: 'Smart Polyglot Support',
     features: [
-      'Improved Mixed-Language Engine: Seamlessly switches between Chinese, Japanese, and English voices.',
-      'Fixed Japanese "Kanji-only" bug: Hiragana and Katakana now correctly trigger Japanese phonetics.',
-      'Refined CJK Text Highlighting: Better word boundary detection for non-space languages.',
+      '智慧語系切換：現在遇到日文、英文、中文交錯的句子，程式會自動切換發音引擎。日文假名不再被當作中文硬唸，發音更道地！',
+      '修復日文漢字問題：解決了日文內容被誤判為中文發音的 Bug。',
+      '優化 CJK 文字高亮：針對不使用空格的語言（中日韓）改進了分詞與高亮顯示邏輯。',
+      '安全性驗證通過：代碼審計確認為 100% 離線架構，完全無任何外部 AI API (Gemini/OpenAI) 呼叫。',
     ],
     controls: [
       { 
@@ -56,22 +57,22 @@ const UPDATES: UpdateEntry[] = [
   },
   {
     version: 'v1.3.0',
-    date: '2025-05-15',
+    date: '2026-01-18',
     title: 'Drag & Drop Experience',
     features: [
-      'Added Drag and Drop file support for the text area.',
-      'Added visual overlay when hovering files over the app.',
-      'Refactored file reading logic for better performance.',
+      '新增拖曳支援：現在可以直接將檔案拖入文字區域來讀取內容。',
+      '視覺互動優化：新增檔案拖曳時的覆蓋層提示效果。',
+      '核心重構：優化了檔案讀取的效能與穩定性。',
     ]
   },
   {
     version: 'v1.0.0',
-    date: 'Initial Release',
+    date: '2026-01-17',
     title: 'Core TTS Engine',
     features: [
-      'Offline Text-to-Speech using native browser API.',
-      'Real-time text highlighting (Karaoke style).',
-      'Privacy-first architecture (no server uploads).',
+      '離線語音合成：使用瀏覽器原生的 Web Speech API。',
+      '即時文字跟隨：支援卡拉 OK 風格的逐字高亮顯示。',
+      '隱私優先架構：所有資料皆在本地處理，不會上傳至伺服器。',
     ]
   }
 ];
