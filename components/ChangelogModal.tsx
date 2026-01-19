@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, GitCommit, CheckCircle2, Upload, History, Trash2, FileText } from 'lucide-react';
+import { X, GitCommit, CheckCircle2, Upload, History, Trash2, Languages } from 'lucide-react';
 
 interface ControlGuide {
   icon: React.ReactNode;
@@ -23,50 +23,45 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
-    version: 'v1.3.0',
-    date: 'Current Version',
-    title: 'Drag & Drop Experience',
+    version: 'v1.3.1',
+    date: '2025-05-20',
+    title: 'Smart Polyglot Support',
     features: [
-      'Added Drag and Drop file support for the text area.',
-      'Added visual overlay when hovering files over the app.',
-      'Refactored file reading logic for better performance.',
+      'Improved Mixed-Language Engine: Seamlessly switches between Chinese, Japanese, and English voices.',
+      'Fixed Japanese "Kanji-only" bug: Hiragana and Katakana now correctly trigger Japanese phonetics.',
+      'Refined CJK Text Highlighting: Better word boundary detection for non-space languages.',
     ],
     controls: [
       { 
         icon: <Upload size={18} />, 
         label: 'Import / Drag & Drop', 
-        desc: 'Support .txt, .md, .srt files' 
+        desc: '支援 .txt, .md, .srt 等多種檔案格式，自動清理多餘代碼。' 
       },
       { 
         icon: <History size={18} />, 
         label: 'Version History', 
-        desc: 'View development log' 
+        desc: '查看開發日誌與功能更新進度。' 
       },
       { 
         icon: <Trash2 size={18} />, 
-        label: 'Reset', 
-        desc: 'Clear text and stop audio' 
+        label: 'Clear / Reset', 
+        desc: '一鍵清空所有文字內容並停止當前語音朗讀。' 
+      },
+      { 
+        icon: <Languages size={18} />, 
+        label: 'Auto Detection', 
+        desc: '智慧偵測語系，根據內容自動選擇最合適的發音引擎。' 
       }
     ]
   },
   {
-    version: 'v1.2.0',
-    date: 'File Format Expansion',
-    title: 'Smart Format Parsing',
+    version: 'v1.3.0',
+    date: '2025-05-15',
+    title: 'Drag & Drop Experience',
     features: [
-      'Added support for Markdown (.md) files with syntax cleaning.',
-      'Added support for Subtitle (.srt) files with timestamp removal.',
-      'Improved text cleaning algorithm for better reading flow.',
-    ]
-  },
-  {
-    version: 'v1.1.0',
-    date: 'File Import',
-    title: 'Basic File Operations',
-    features: [
-      'Added file upload button for .txt files.',
-      'Added "Clear Text" button to quickly reset the application.',
-      'Integrated file reader with auto-play cancellation.',
+      'Added Drag and Drop file support for the text area.',
+      'Added visual overlay when hovering files over the app.',
+      'Refactored file reading logic for better performance.',
     ]
   },
   {
@@ -76,8 +71,6 @@ const UPDATES: UpdateEntry[] = [
     features: [
       'Offline Text-to-Speech using native browser API.',
       'Real-time text highlighting (Karaoke style).',
-      'Voice selection with language filtering.',
-      'Adjustable speed, pitch, and volume settings.',
       'Privacy-first architecture (no server uploads).',
     ]
   }
@@ -100,8 +93,8 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/5 bg-slate-900/50">
           <div>
-            <h2 className="text-xl font-bold text-white">Development Log</h2>
-            <p className="text-xs text-gray-400 mt-1">Track the evolution of NativeSpeak</p>
+            <h2 className="text-xl font-bold text-white">開發日誌 (Changelog)</h2>
+            <p className="text-xs text-gray-400 mt-1">追蹤 NativeSpeak 的進化過程</p>
           </div>
           <button 
             onClick={onClose}
@@ -130,21 +123,23 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
                 <h3 className="text-lg font-semibold text-white">{update.title}</h3>
               </div>
 
-              {/* Icon Guide (New Feature) */}
+              {/* Icon Guide (Icon Legend) */}
               {update.controls && (
                 <div className="grid grid-cols-1 gap-2 mb-4 bg-white/5 rounded-xl p-3 border border-white/5">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 px-1">Interface Guide</p>
-                  {update.controls.map((ctrl, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors">
-                      <div className="p-2 bg-slate-800 rounded-lg text-primary shadow-sm border border-white/5">
-                        {ctrl.icon}
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 px-1">功能圖示說明</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {update.controls.map((ctrl, i) => (
+                      <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/40 border border-white/5">
+                        <div className="p-1.5 bg-primary/10 rounded-lg text-primary">
+                          {ctrl.icon}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-gray-200 truncate">{ctrl.label}</span>
+                          <span className="text-[10px] text-gray-500 leading-tight">{ctrl.desc}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-gray-200">{ctrl.label}</span>
-                        <span className="text-xs text-gray-500">{ctrl.desc}</span>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -162,7 +157,7 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
           {/* Bottom Footer */}
            <div className="pt-8 flex items-center justify-center gap-2 text-gray-500 text-xs">
               <GitCommit size={14} />
-              <span>NativeSpeak v1.3.0</span>
+              <span>NativeSpeak v1.3.1 (Fully Offline)</span>
            </div>
         </div>
 
