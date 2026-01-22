@@ -23,20 +23,40 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
+    version: 'v1.3.3',
+    date: '2026-01-22',
+    title: 'Unified Context Logic',
+    features: [
+      '邏輯統一：將廣東話的判斷邏輯升級為與日語/英語相同的標準。',
+      '標準中文同化 (Context Promotion)：當「標準書面語」句子被廣東話段落包圍時（前後文判斷），系統會自動將其視為廣東話來朗讀，確保語音流暢度，不會突然切換回國語。',
+      '深度上下文掃描：採用了雙層（2-step）的前後文搜尋機制，大幅提升混合語言文章的朗讀準確性。',
+    ]
+  },
+  {
+    version: 'v1.3.2',
+    date: '2026-01-21',
+    title: 'Context-Aware Cantonese',
+    features: [
+      '智慧廣東話辨識：新增粵語（Cantonese）支援，能識別口語特徵字（如：係、唔、嘅）。',
+      '標點與數字優化：在廣東話段落中的數字（如 "123"）與符號現在會正確使用粵語朗讀。',
+      '語音篩選器：新增「Cantonese」專屬分類標籤。',
+    ]
+  },
+  {
     version: 'v1.3.1',
-    date: '2026-01-19',
+    date: '2026-01-20',
     title: 'Smart Polyglot Support',
     features: [
-      '智慧語系切換：現在遇到日文、英文、中文交錯的句子，程式會自動切換發音引擎。日文假名不再被當作中文硬唸，發音更道地！',
+      '智慧語系切換：現在遇到日文、英文、中文交錯的句子，程式會自動切換發音引擎。',
       '修復日文漢字問題：解決了日文內容被誤判為中文發音的 Bug。',
       '優化 CJK 文字高亮：針對不使用空格的語言（中日韓）改進了分詞與高亮顯示邏輯。',
-      '安全性驗證通過：代碼審計確認為 100% 離線架構，完全無任何外部 AI API (Gemini/OpenAI) 呼叫。',
+      '安全性驗證通過：代碼審計確認為 100% 離線架構。',
     ],
     controls: [
       { 
         icon: <Upload size={18} />, 
         label: 'Import / Drag & Drop', 
-        desc: '支援 .txt, .md, .srt 等多種檔案格式，自動清理多餘代碼。' 
+        desc: '支援 .txt, .md, .srt 等多種檔案格式。' 
       },
       { 
         icon: <History size={18} />, 
@@ -46,12 +66,12 @@ const UPDATES: UpdateEntry[] = [
       { 
         icon: <Trash2 size={18} />, 
         label: 'Clear / Reset', 
-        desc: '一鍵清空所有文字內容並停止當前語音朗讀。' 
+        desc: '一鍵清空所有文字內容。' 
       },
       { 
         icon: <Languages size={18} />, 
         label: 'Auto Detection', 
-        desc: '智慧偵測語系，根據內容自動選擇最合適的發音引擎。' 
+        desc: '智慧偵測語系，自動選擇發音引擎。' 
       }
     ]
   },
@@ -158,7 +178,7 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
           {/* Bottom Footer */}
            <div className="pt-8 flex items-center justify-center gap-2 text-gray-500 text-xs">
               <GitCommit size={14} />
-              <span>NativeSpeak v1.3.1 (Fully Offline)</span>
+              <span>NativeSpeak v1.3.3 (Fully Offline)</span>
            </div>
         </div>
 

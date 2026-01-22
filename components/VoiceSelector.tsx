@@ -8,12 +8,13 @@ interface VoiceSelectorProps {
   onVoiceChange: (voice: SpeechSynthesisVoice) => void;
 }
 
-type LangFilter = 'all' | 'en' | 'zh' | 'ja';
+type LangFilter = 'all' | 'en' | 'zh' | 'yue' | 'ja';
 
 const FILTERS: { id: LangFilter; label: string; flag: string }[] = [
   { id: 'all', label: 'All', flag: '🌏' },
   { id: 'en', label: 'English', flag: '🇺🇸' },
-  { id: 'zh', label: 'Chinese', flag: '🇹🇼' }, // Covers ZH-CN, ZH-TW, ZH-HK
+  { id: 'zh', label: 'Mandarin', flag: '🇹🇼' },
+  { id: 'yue', label: 'Cantonese', flag: '🇭🇰' },
   { id: 'ja', label: 'Japanese', flag: '🇯🇵' },
 ];
 
@@ -35,9 +36,22 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
   // Filter voices based on language code (BCP 47 tag)
   const filteredVoices = useMemo(() => {
     if (filter === 'all') return voices;
-    return voices.filter(voice => 
-      voice.lang.toLowerCase().replace('_', '-').startsWith(filter)
-    );
+    
+    return voices.filter(voice => {
+      const lang = voice.lang.toLowerCase().replace('_', '-');
+      
+      if (filter === 'yue') {
+        // Specific check for Hong Kong / Cantonese
+        return lang === 'zh-hk' || lang.includes('yue');
+      }
+      
+      if (filter === 'zh') {
+        // Mandarin check: starts with zh but NOT HK/Cantonese
+        return lang.startsWith('zh') && lang !== 'zh-hk' && !lang.includes('yue');
+      }
+
+      return lang.startsWith(filter);
+    });
   }, [voices, filter]);
 
   // Sync Voice -> Filter
@@ -47,11 +61,16 @@ const VoiceSelector: React.FC<VoiceSelectorProps> = ({ voices, selectedVoice, on
     const lang = selectedVoice.lang.toLowerCase().replace('_', '-');
     
     // Only switch if the current filter hides the selected voice
-    if (filter !== 'all' && !lang.startsWith(filter)) {
-      if (lang.startsWith('en')) setFilter('en');
-      else if (lang.startsWith('zh')) setFilter('zh');
-      else if (lang.startsWith('ja')) setFilter('ja');
-      else setFilter('all');
+    if (filter !== 'all') {
+       // Logic to check if selected voice belongs to current filter, if not reset or switch
+       const isCantonese = lang === 'zh-hk' || lang.includes('yue');
+       
+       if (filter === 'yue' && !isCantonese) setFilter('all');
+       else if (filter === 'zh' && (isCantonese || !lang.startsWith('zh'))) setFilter('all');
+       else if (filter === 'en' && !lang.startsWith('en')) setFilter('all');
+       else if (filter === 'ja' && !lang.startsWith('ja')) setFilter('all');
+    } else {
+       // Optional: Auto-select filter based on voice? (Maybe too jumpy, keeping 'all' is safer)
     }
   }, [selectedVoice]);
 
