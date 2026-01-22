@@ -7,7 +7,8 @@ interface UtteranceSegment {
   offset: number;
 }
 
-type LangType = 'ja' | 'zh' | 'en' | 'neutral';
+// Added 'yue' for Cantonese
+type LangType = 'ja' | 'zh' | 'yue' | 'en' | 'neutral';
 
 export const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -24,6 +25,10 @@ export const useSpeechSynthesis = () => {
   const segmentsRef = useRef<UtteranceSegment[]>([]);
   const userPreferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   
+  // Helper: Normalize language tags for cross-browser comparison
+  // e.g., "zh_HK" -> "zh-hk", "en-US" -> "en-us"
+  const normalizeLang = (lang: string) => lang.toLowerCase().replace('_', '-');
+
   // Load voices
   useEffect(() => {
     const loadVoices = () => {
@@ -71,8 +76,15 @@ export const useSpeechSynthesis = () => {
   const getSegmentLang = (text: string): LangType => {
      // Hiragana/Katakana -> Japanese
      if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
-     // Hanzi -> Chinese (simplification: if mixed with Kana, previous rule catches it)
+     
+     // Detect Cantonese specific colloquial characters
+     // 係, 唔, 佢, 嘅, 冇, 睇, 咗, 嚟, 喺, 哋, 俾, 諗, 乜, 嘢, 咁, 喎
+     const cantoneseMarkers = /[係唔佢嘅冇睇咗嚟喺哋俾諗乜嘢咁喎]/;
+     if (cantoneseMarkers.test(text)) return 'yue';
+
+     // Hanzi -> Chinese (Standard Mandarin)
      if (/[\u4E00-\u9FFF]/.test(text)) return 'zh';
+     
      // Latin -> English
      if (/[a-zA-Z]/.test(text)) return 'en';
      return 'neutral';
@@ -138,6 +150,39 @@ export const useSpeechSynthesis = () => {
   };
 
   /**
+   * Helper to scan neighbors for a valid language
+   */
+  const scanContext = (currentIndex: number, allSegments: UtteranceSegment[]): LangType => {
+      let foundLang: LangType = 'neutral';
+      
+      // Look ahead 1
+      if (currentIndex + 1 < allSegments.length) {
+          const next = getSegmentLang(allSegments[currentIndex + 1].text);
+          if (next !== 'neutral') foundLang = next;
+      }
+      
+      // Look ahead 2
+      if (foundLang === 'neutral' && currentIndex + 2 < allSegments.length) {
+           const next2 = getSegmentLang(allSegments[currentIndex + 2].text);
+           if (next2 !== 'neutral') foundLang = next2;
+      }
+
+      // Look behind 1
+      if (foundLang === 'neutral' && currentIndex - 1 >= 0) {
+           const prev = getSegmentLang(allSegments[currentIndex - 1].text);
+           if (prev !== 'neutral') foundLang = prev;
+      }
+
+      // Look behind 2
+      if (foundLang === 'neutral' && currentIndex - 2 >= 0) {
+           const prev2 = getSegmentLang(allSegments[currentIndex - 2].text);
+           if (prev2 !== 'neutral') foundLang = prev2;
+      }
+
+      return foundLang;
+  };
+
+  /**
    * Play Segment with contextual voice detection
    */
   const playSegment = (index: number, settings: TTSSettings) => {
@@ -148,63 +193,72 @@ export const useSpeechSynthesis = () => {
     }
 
     const segment = segmentsRef.current[index];
+    const allSegments = segmentsRef.current;
     
-    // 1. Identify Language Type with Finite Context Lookahead/Lookbehind
+    // 1. Identify Language Type
     let langType = getSegmentLang(segment.text);
     
-    // Contextual Resolver for Neutral segments (e.g. "3.", "123", "...")
+    // 2. Resolve Context
+    // Scenario A: Neutral (numbers/punctuation) -> Adopt ANY surrounding language
     if (langType === 'neutral') {
-        let foundLang: LangType = 'neutral';
-        
-        // Priority 1: Look ahead 1 step
-        if (index + 1 < segmentsRef.current.length) {
-            const next = getSegmentLang(segmentsRef.current[index + 1].text);
-            if (next !== 'neutral') foundLang = next;
+        const contextLang = scanContext(index, allSegments);
+        if (contextLang !== 'neutral') {
+            langType = contextLang;
         }
-        
-        // Priority 2: Look ahead 2 steps
-        if (foundLang === 'neutral' && index + 2 < segmentsRef.current.length) {
-             const next2 = getSegmentLang(segmentsRef.current[index + 2].text);
-             if (next2 !== 'neutral') foundLang = next2;
+    }
+    
+    // Scenario B: Ambiguous Standard Chinese (zh) -> Check if surrounding context is Cantonese (yue)
+    if (langType === 'zh') {
+        const contextLang = scanContext(index, allSegments);
+        if (contextLang === 'yue') {
+            langType = 'yue';
         }
-
-        // Priority 3: Look behind 1 step
-        if (foundLang === 'neutral' && index - 1 >= 0) {
-             const prev = getSegmentLang(segmentsRef.current[index - 1].text);
-             if (prev !== 'neutral') foundLang = prev;
-        }
-
-        // Priority 4: Look behind 2 steps
-        if (foundLang === 'neutral' && index - 2 >= 0) {
-             const prev2 = getSegmentLang(segmentsRef.current[index - 2].text);
-             if (prev2 !== 'neutral') foundLang = prev2;
-        }
-        
-        if (foundLang !== 'neutral') {
-            langType = foundLang;
-        }
-        // If still neutral, it falls back to default voice (no break/return here)
     }
 
-    // 2. Select Voice based on Resolved LangType
+    // 3. Select Voice based on Resolved LangType
     const availableVoices = voices.length > 0 ? voices : synth.current.getVoices();
     let targetVoice: SpeechSynthesisVoice | undefined;
 
     switch (langType) {
         case 'ja':
-            targetVoice = availableVoices.find(v => v.lang.startsWith('ja'));
+            targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('ja'));
             break;
-        case 'zh':
-            // Prioritize high-quality voices like Meijia if available
-            targetVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia') && v.lang.startsWith('zh')) 
-                          || availableVoices.find(v => v.lang.startsWith('zh') || v.lang.startsWith('cmn'));
+        case 'yue': // Cantonese
+            targetVoice = availableVoices.find(v => {
+                const l = normalizeLang(v.lang);
+                return l === 'zh-hk' || l === 'zh-yue' || l === 'yue';
+            });
+            break;
+        case 'zh': // Mandarin
+            // Check preferred voice first
+            if (userPreferredVoiceRef.current) {
+                const prefLang = normalizeLang(userPreferredVoiceRef.current.lang);
+                // If user manually picked HK/Yue, respect that even for Standard Chinese text
+                if (prefLang === 'zh-hk' || prefLang.includes('yue')) {
+                   targetVoice = userPreferredVoiceRef.current;
+                }
+            }
+            
+            if (!targetVoice) {
+               // Default to Mandarin (CN/TW), excluding HK
+               targetVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia') && normalizeLang(v.lang).startsWith('zh')) 
+                          || availableVoices.find(v => {
+                              const l = normalizeLang(v.lang);
+                              return l.startsWith('zh') && l !== 'zh-hk' && !l.includes('yue');
+                          }) 
+                          || availableVoices.find(v => normalizeLang(v.lang).startsWith('cmn'));
+            }
             break;
         case 'en':
-            targetVoice = availableVoices.find(v => v.lang.startsWith('en'));
+            targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('en'));
             break;
     }
     
-    // 3. Fallback to user preference
+    // 4. Fallback logic
+    if (!targetVoice && langType !== 'neutral') {
+        if (langType === 'yue') targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('zh'));
+    }
+
     const finalVoice = targetVoice || userPreferredVoiceRef.current;
 
     const utterance = new SpeechSynthesisUtterance(segment.text);
