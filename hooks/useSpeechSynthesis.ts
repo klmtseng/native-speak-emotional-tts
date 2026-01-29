@@ -9,6 +9,7 @@ interface UtteranceSegment {
 
 // Added 'yue' for Cantonese
 type LangType = 'ja' | 'zh' | 'yue' | 'en' | 'neutral';
+type Gender = 'female' | 'male' | 'unknown';
 
 export const useSpeechSynthesis = () => {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -28,6 +29,61 @@ export const useSpeechSynthesis = () => {
   // Helper: Normalize language tags for cross-browser comparison
   // e.g., "zh_HK" -> "zh-hk", "en-US" -> "en-us"
   const normalizeLang = (lang: string) => lang.toLowerCase().replace('_', '-');
+
+  // Helper: Detect gender from voice name (Heuristic)
+  // Expanded for iOS/macOS specific names
+  const getVoiceGender = (voice: SpeechSynthesisVoice): Gender => {
+    const name = voice.name.toLowerCase();
+    
+    // 1. Explicit labels (Common in Windows/Android/Edge/Chrome)
+    if (name.includes('female') || name.includes('woman') || name.includes('girl')) return 'female';
+    if (name.includes('male') || name.includes('man') || name.includes('boy')) return 'male';
+
+    // 2. iOS / macOS / Apple Specific Names (Known defaults)
+    // These voices often lack "female"/"male" descriptors in their name property.
+    
+    // Apple Female Voices
+    const appleFemales = [
+        'samantha', 'karen', 'tessa', 'moira', 'veena', 'fiona',   // English
+        'ting-ting', 'meijia', 'sin-ji', 'shu-han',               // Chinese/Cantonese
+        'kyoko', 'otoya',                                         // Japanese (Otoya is male but let's check explicit list below)
+        'amelie', 'anna', 'carmit', 'lekha', 'mariska', 'melina', // European/Other
+        'monica', 'nora', 'paulina', 'satu', 'yuna', 'zosia', 'zuzana', 'sara', 
+        'alice', 'aurora', 'joana', 'alva', 'kanya', 'yuri'       // Yuri is Russian female
+    ];
+
+    // Apple Male Voices
+    const appleMales = [
+        'daniel', 'fred', 'gordon', 'rishi', 'xander',            // English
+        'kangkang', // Chinese (often male)
+        'hattori', // Japanese
+        'aaron', 'arthur', 'jorge', 'juan', 'maged', 'martin', 'thomas'
+    ];
+
+    // Correcting specific Japanese/Cantonese overlap
+    if (appleFemales.some(n => name.includes(n))) return 'female';
+    if (appleMales.some(n => name.includes(n))) return 'male';
+
+    // Default Fallback
+    return 'unknown';
+  };
+
+  /**
+   * Helper: Replace noisy punctuation and Emojis with spaces to silence them 
+   * CRITICAL: Must preserve string length (match.length) to keep charIndex aligned for highlighting.
+   */
+  const sanitizeForSpeech = (text: string): string => {
+      // 1. Replace noisy punctuation: brackets, slashes, asterisks, quotes, dashes
+      // We keep sentence terminators (.,!?;:) because they provide natural pauses.
+      let clean = text.replace(/[()\[\]{}<>"'_*@#$%^&+=`~|\\/\-]/g, (match) => ' '.repeat(match.length));
+      
+      // 2. Replace Emojis and Pictographs
+      // Using Unicode Property Escapes for robust emoji detection.
+      // NOTE: Emojis are often surrogate pairs (length 2). We must replace with 2 spaces if so.
+      clean = clean.replace(/[\p{Extended_Pictographic}]/gu, (match) => ' '.repeat(match.length));
+      
+      return clean;
+  };
 
   // Load voices
   useEffect(() => {
@@ -199,7 +255,6 @@ export const useSpeechSynthesis = () => {
     let langType = getSegmentLang(segment.text);
     
     // 2. Resolve Context
-    // Scenario A: Neutral (numbers/punctuation) -> Adopt ANY surrounding language
     if (langType === 'neutral') {
         const contextLang = scanContext(index, allSegments);
         if (contextLang !== 'neutral') {
@@ -207,7 +262,7 @@ export const useSpeechSynthesis = () => {
         }
     }
     
-    // Scenario B: Ambiguous Standard Chinese (zh) -> Check if surrounding context is Cantonese (yue)
+    // Ambiguous Standard Chinese (zh) -> Check if surrounding context is Cantonese (yue)
     if (langType === 'zh') {
         const contextLang = scanContext(index, allSegments);
         if (contextLang === 'yue') {
@@ -215,16 +270,30 @@ export const useSpeechSynthesis = () => {
         }
     }
 
-    // 3. Select Voice based on Resolved LangType
+    // 3. Select Voice based on Resolved LangType AND Gender Consistency
     const availableVoices = voices.length > 0 ? voices : synth.current.getVoices();
     let targetVoice: SpeechSynthesisVoice | undefined;
 
+    // Detect user's preferred gender
+    const preferredGender = userPreferredVoiceRef.current ? getVoiceGender(userPreferredVoiceRef.current) : 'unknown';
+
+    // Helper to find voice with gender preference
+    const findVoice = (matcher: (v: SpeechSynthesisVoice) => boolean) => {
+        // Try to match specific language AND same gender first
+        if (preferredGender !== 'unknown') {
+            const genderMatch = availableVoices.find(v => matcher(v) && getVoiceGender(v) === preferredGender);
+            if (genderMatch) return genderMatch;
+        }
+        // Fallback to just matching language
+        return availableVoices.find(matcher);
+    };
+
     switch (langType) {
         case 'ja':
-            targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('ja'));
+            targetVoice = findVoice(v => normalizeLang(v.lang).startsWith('ja'));
             break;
         case 'yue': // Cantonese
-            targetVoice = availableVoices.find(v => {
+            targetVoice = findVoice(v => {
                 const l = normalizeLang(v.lang);
                 return l === 'zh-hk' || l === 'zh-yue' || l === 'yue';
             });
@@ -233,24 +302,24 @@ export const useSpeechSynthesis = () => {
             // Check preferred voice first
             if (userPreferredVoiceRef.current) {
                 const prefLang = normalizeLang(userPreferredVoiceRef.current.lang);
-                // If user manually picked HK/Yue, respect that even for Standard Chinese text
                 if (prefLang === 'zh-hk' || prefLang.includes('yue')) {
                    targetVoice = userPreferredVoiceRef.current;
                 }
             }
             
             if (!targetVoice) {
-               // Default to Mandarin (CN/TW), excluding HK
-               targetVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia') && normalizeLang(v.lang).startsWith('zh')) 
-                          || availableVoices.find(v => {
-                              const l = normalizeLang(v.lang);
-                              return l.startsWith('zh') && l !== 'zh-hk' && !l.includes('yue');
-                          }) 
-                          || availableVoices.find(v => normalizeLang(v.lang).startsWith('cmn'));
+                // Priority: Mandarin matching gender -> Any Mandarin (excluding HK/Yue)
+                targetVoice = findVoice(v => {
+                    const l = normalizeLang(v.lang);
+                    // Match generic zh or cmn, but EXCLUDE hk/yue
+                    const isMandarin = (l.startsWith('zh') || l.startsWith('cmn')) && l !== 'zh-hk' && !l.includes('yue');
+                    // Special preference for Meijia if user is unknown/female preference, but handled by findVoice generally
+                    return isMandarin;
+                });
             }
             break;
         case 'en':
-            targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('en'));
+            targetVoice = findVoice(v => normalizeLang(v.lang).startsWith('en'));
             break;
     }
     
@@ -261,7 +330,10 @@ export const useSpeechSynthesis = () => {
 
     const finalVoice = targetVoice || userPreferredVoiceRef.current;
 
-    const utterance = new SpeechSynthesisUtterance(segment.text);
+    // 5. Sanitize text for audio (remove noisy punctuation AND emojis) 
+    const speakText = sanitizeForSpeech(segment.text);
+
+    const utterance = new SpeechSynthesisUtterance(speakText);
     if (finalVoice) {
       utterance.voice = finalVoice;
       utterance.lang = finalVoice.lang; 
