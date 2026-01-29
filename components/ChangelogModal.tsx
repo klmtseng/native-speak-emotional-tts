@@ -23,10 +23,21 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
+    version: 'v1.3.6',
+    date: '2026-01-30',
+    title: 'Precision & Stability',
+    features: [
+      '智慧分詞修復 (Regex Segmentation)：優化了斷句邏輯，修正版本號（如 v1.3.6）或網址（如 google.com）被錯誤切分導致朗讀卡頓的問題。',
+      '負數朗讀支援 (Negative Numbers)：修正了負號被誤認為標點符號而過濾的 Bug，現在能正確朗讀溫度或負數值（如 -5）。',
+      '視覺對齊 (Layout Stability)：強制同步高亮層與輸入框的滾動條空間 (Scrollbar Gutter)，解決了內容較長時高亮背景錯位的問題。',
+    ]
+  },
+  {
     version: 'v1.3.5',
     date: '2026-01-30',
-    title: 'iOS Polish & Silent Emojis',
+    title: 'iOS Polish & Smart Dates',
     features: [
+      '智慧日期朗讀 (Smart Date Reading)：在中文、廣東話與日文中，系統會自動將 "YYYY-MM-DD" 格式（如 2026-01-30）轉換為自然的「年月日」讀法，不再逐字朗讀數字與連字號。',
       'Emoji 靜音 (Silent Emojis)：現在 Emoji 與特殊表情符號不會被讀出來（例如不會讀出 "Smiling face with sunglasses"），避免打斷閱讀體驗。',
       'iOS 性別一致性修復：修正了在 iPhone/iPad 上，語音切換無法正確維持性別（例如選了女生卻跳回男生）的問題。我們擴增了對 Apple 內建語音名稱的辨識庫。',
     ]
@@ -196,7 +207,7 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
           {/* Bottom Footer */}
            <div className="pt-8 flex items-center justify-center gap-2 text-gray-500 text-xs">
               <GitCommit size={14} />
-              <span>NativeSpeak v1.3.5 (Fully Offline)</span>
+              <span>NativeSpeak v1.3.6 (Fully Offline)</span>
            </div>
         </div>
 

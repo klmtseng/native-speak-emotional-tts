@@ -88,6 +88,13 @@ const TextInput: React.FC<TextInputProps> = ({ text, setText, charIndex, isSpeak
   };
 
   const typographyStyles = "text-lg md:text-xl font-normal leading-relaxed font-sans tracking-normal";
+  
+  // CRITICAL: scrollbar-gutter ensures both layers reserve space for the scrollbar 
+  // even if one doesn't strictly need it yet, preventing layout shifts.
+  const scrollStyles = {
+    fontVariantLigatures: 'none',
+    scrollbarGutter: 'stable' 
+  };
 
   return (
     <div 
@@ -109,14 +116,16 @@ const TextInput: React.FC<TextInputProps> = ({ text, setText, charIndex, isSpeak
           </div>
       )}
 
+      {/* Overlay: pointer-events-none ensures clicks go through to textarea */}
       <div 
         ref={overlayRef}
         className={`absolute inset-0 p-6 whitespace-pre-wrap break-words text-transparent pointer-events-none overflow-y-auto ${typographyStyles}`}
-        style={{ fontVariantLigatures: 'none' }}
+        style={scrollStyles}
         aria-hidden="true"
         dangerouslySetInnerHTML={{ __html: getHighlightedText() }}
       />
       
+      {/* Textarea: Visible text color comes from here. Overlay provides background highlight. */}
       <textarea
         ref={textAreaRef}
         value={text}
@@ -124,7 +133,7 @@ const TextInput: React.FC<TextInputProps> = ({ text, setText, charIndex, isSpeak
         onScroll={handleScroll}
         onFocus={handleFocus}
         className={`absolute inset-0 w-full h-full p-6 bg-transparent text-gray-100 placeholder-gray-600 resize-none focus:outline-none focus:ring-0 z-10 ${typographyStyles}`}
-        style={{ fontVariantLigatures: 'none', WebkitTextFillColor: 'currentColor' }}
+        style={{ ...scrollStyles, WebkitTextFillColor: 'currentColor' }}
         placeholder="在此輸入、貼上文字，或將檔案拖放到這裡..."
         spellCheck="false"
       />
