@@ -23,6 +23,24 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
+    version: 'v1.3.5',
+    date: '2026-01-30',
+    title: 'iOS Polish & Silent Emojis',
+    features: [
+      'Emoji 靜音 (Silent Emojis)：現在 Emoji 與特殊表情符號不會被讀出來（例如不會讀出 "Smiling face with sunglasses"），避免打斷閱讀體驗。',
+      'iOS 性別一致性修復：修正了在 iPhone/iPad 上，語音切換無法正確維持性別（例如選了女生卻跳回男生）的問題。我們擴增了對 Apple 內建語音名稱的辨識庫。',
+    ]
+  },
+  {
+    version: 'v1.3.4',
+    date: '2026-01-30',
+    title: 'Natural Flow & Gender Sync',
+    features: [
+      '性別一致性 (Gender Consistency)：現在切換語言時（如中翻英），系統會自動選擇與您當前聲音相同性別（男/女）的語音引擎，保持聽感連貫。',
+      '標點符號靜音 (Silent Punctuation)：括號、引號、連接線等符號現在不會被讀出來，但仍保留視覺高亮位置，讓朗讀更像真人。',
+    ]
+  },
+  {
     version: 'v1.3.3',
     date: '2026-01-22',
     title: 'Unified Context Logic',
@@ -178,7 +196,7 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
           {/* Bottom Footer */}
            <div className="pt-8 flex items-center justify-center gap-2 text-gray-500 text-xs">
               <GitCommit size={14} />
-              <span>NativeSpeak v1.3.3 (Fully Offline)</span>
+              <span>NativeSpeak v1.3.5 (Fully Offline)</span>
            </div>
         </div>
 
