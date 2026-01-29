@@ -31,40 +31,33 @@ export const useSpeechSynthesis = () => {
   const normalizeLang = (lang: string) => lang.toLowerCase().replace('_', '-');
 
   // Helper: Detect gender from voice name (Heuristic)
-  // Expanded for iOS/macOS specific names
   const getVoiceGender = (voice: SpeechSynthesisVoice): Gender => {
     const name = voice.name.toLowerCase();
     
-    // 1. Explicit labels (Common in Windows/Android/Edge/Chrome)
+    // 1. Explicit labels
     if (name.includes('female') || name.includes('woman') || name.includes('girl')) return 'female';
     if (name.includes('male') || name.includes('man') || name.includes('boy')) return 'male';
 
-    // 2. iOS / macOS / Apple Specific Names (Known defaults)
-    // These voices often lack "female"/"male" descriptors in their name property.
-    
-    // Apple Female Voices
+    // 2. iOS / macOS / Apple Specific Names
     const appleFemales = [
-        'samantha', 'karen', 'tessa', 'moira', 'veena', 'fiona',   // English
-        'ting-ting', 'meijia', 'sin-ji', 'shu-han',               // Chinese/Cantonese
-        'kyoko', 'otoya',                                         // Japanese (Otoya is male but let's check explicit list below)
-        'amelie', 'anna', 'carmit', 'lekha', 'mariska', 'melina', // European/Other
+        'samantha', 'karen', 'tessa', 'moira', 'veena', 'fiona',   
+        'ting-ting', 'meijia', 'sin-ji', 'shu-han',               
+        'kyoko', 'otoya',                                         
+        'amelie', 'anna', 'carmit', 'lekha', 'mariska', 'melina', 
         'monica', 'nora', 'paulina', 'satu', 'yuna', 'zosia', 'zuzana', 'sara', 
-        'alice', 'aurora', 'joana', 'alva', 'kanya', 'yuri'       // Yuri is Russian female
+        'alice', 'aurora', 'joana', 'alva', 'kanya', 'yuri'       
     ];
 
-    // Apple Male Voices
     const appleMales = [
-        'daniel', 'fred', 'gordon', 'rishi', 'xander',            // English
-        'kangkang', // Chinese (often male)
-        'hattori', // Japanese
+        'daniel', 'fred', 'gordon', 'rishi', 'xander',            
+        'kangkang', 
+        'hattori', 
         'aaron', 'arthur', 'jorge', 'juan', 'maged', 'martin', 'thomas'
     ];
 
-    // Correcting specific Japanese/Cantonese overlap
     if (appleFemales.some(n => name.includes(n))) return 'female';
     if (appleMales.some(n => name.includes(n))) return 'male';
 
-    // Default Fallback
     return 'unknown';
   };
 
@@ -73,13 +66,20 @@ export const useSpeechSynthesis = () => {
    * CRITICAL: Must preserve string length (match.length) to keep charIndex aligned for highlighting.
    */
   const sanitizeForSpeech = (text: string): string => {
-      // 1. Replace noisy punctuation: brackets, slashes, asterisks, quotes, dashes
-      // We keep sentence terminators (.,!?;:) because they provide natural pauses.
-      let clean = text.replace(/[()\[\]{}<>"'_*@#$%^&+=`~|\\/\-]/g, (match) => ' '.repeat(match.length));
+      // 1. Replace noisy punctuation BUT protect:
+      //    a) Dates/Ranges: digit-hyphen-digit (2026-01)
+      //    b) Negative Numbers: space/start-hyphen-digit ( -5)
+      
+      let clean = text.replace(
+          /(\d)-(\d)|(\s|^)-(\d)|[-()\[\]{}<>"'_*@#$%^&+=`~|\\/]/g, 
+          (match, d1, d2, s1, n1) => {
+              if (d1 && d2) return match; // Protect date format 2026-01
+              if (n1) return match;       // Protect negative number -5 (s1 is space or start)
+              return ' '.repeat(match.length);
+          }
+      );
       
       // 2. Replace Emojis and Pictographs
-      // Using Unicode Property Escapes for robust emoji detection.
-      // NOTE: Emojis are often surrogate pairs (length 2). We must replace with 2 spaces if so.
       clean = clean.replace(/[\p{Extended_Pictographic}]/gu, (match) => ' '.repeat(match.length));
       
       return clean;
@@ -130,18 +130,12 @@ export const useSpeechSynthesis = () => {
    * Determine language category for a text segment
    */
   const getSegmentLang = (text: string): LangType => {
-     // Hiragana/Katakana -> Japanese
      if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja';
      
-     // Detect Cantonese specific colloquial characters
-     // 係, 唔, 佢, 嘅, 冇, 睇, 咗, 嚟, 喺, 哋, 俾, 諗, 乜, 嘢, 咁, 喎
      const cantoneseMarkers = /[係唔佢嘅冇睇咗嚟喺哋俾諗乜嘢咁喎]/;
      if (cantoneseMarkers.test(text)) return 'yue';
 
-     // Hanzi -> Chinese (Standard Mandarin)
      if (/[\u4E00-\u9FFF]/.test(text)) return 'zh';
-     
-     // Latin -> English
      if (/[a-zA-Z]/.test(text)) return 'en';
      return 'neutral';
   };
@@ -151,13 +145,20 @@ export const useSpeechSynthesis = () => {
    */
   const parseTextToSegments = (fullText: string): UtteranceSegment[] => {
     const segments: UtteranceSegment[] = [];
-    // 1. Coarse split by sentence endings (preserve delimiters)
-    const sentenceRegex = /([^.!?。！？\n\r]+[.!?。！？\n\r]*)|([.!?。！？\n\r]+)/g;
+    
+    // CRITICAL FIX FOR v1.3.6 (2026-01-30):
+    // The regex now explicitly includes `(?:\d+\.\d+)` in the content group.
+    // This forces sequences like "1.3" or "1.3.6" to be treated as content, 
+    // preventing the dot from being interpreted as a sentence terminator.
+    
+    const sentenceRegex = /((?:[^.!?。！？\n\r]|(?:\d+\.\d+)|[.!?。！？](?!\s|$))+)(?:[.!?。！？\n\r]+(?=\s|$)|$|[\n\r]+)/g;
     
     let match;
     while ((match = sentenceRegex.exec(fullText)) !== null) {
-      const sentence = match[0];
+      const sentence = match[0]; // Captures the full segment including punctuation
       const sentenceOffset = match.index;
+      
+      if (!sentence.trim()) continue; // Skip empty segments
 
       // Check for mixed content (Latin vs CJK)
       const hasCJK = /[\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]/.test(sentence);
@@ -172,32 +173,30 @@ export const useSpeechSynthesis = () => {
          let subMatch;
 
          while ((subMatch = cjkRegex.exec(sentence)) !== null) {
-            // Push preceding non-CJK text (e.g., "3. Privacy First (")
+            // Push preceding non-CJK text
             const nonCjkText = sentence.substring(lastIndex, subMatch.index);
             if (nonCjkText) { 
                segments.push({ text: nonCjkText, offset: sentenceOffset + lastIndex });
             }
 
-            // Push CJK text (e.g., "隱私優先")
+            // Push CJK text
             segments.push({ text: subMatch[0], offset: sentenceOffset + subMatch.index });
             
             lastIndex = cjkRegex.lastIndex;
          }
 
-         // Push remaining text (e.g., ")")
+         // Push remaining text
          const remaining = sentence.substring(lastIndex);
          if (remaining) {
             segments.push({ text: remaining, offset: sentenceOffset + lastIndex });
          }
 
       } else {
-        // Simple sentence (all English, all CJK, or Neutral like "3.")
-        if (sentence.trim()) {
-          segments.push({ text: sentence, offset: sentenceOffset });
-        }
+        segments.push({ text: sentence, offset: sentenceOffset });
       }
     }
     
+    // Fallback: If regex fails to capture anything but text exists, treat as one block
     if (segments.length === 0 && fullText.trim().length > 0) {
       segments.push({ text: fullText, offset: 0 });
     }
@@ -211,28 +210,14 @@ export const useSpeechSynthesis = () => {
   const scanContext = (currentIndex: number, allSegments: UtteranceSegment[]): LangType => {
       let foundLang: LangType = 'neutral';
       
-      // Look ahead 1
-      if (currentIndex + 1 < allSegments.length) {
-          const next = getSegmentLang(allSegments[currentIndex + 1].text);
-          if (next !== 'neutral') foundLang = next;
-      }
+      // Look ahead 2 steps, look behind 2 steps
+      const indices = [currentIndex + 1, currentIndex + 2, currentIndex - 1, currentIndex - 2];
       
-      // Look ahead 2
-      if (foundLang === 'neutral' && currentIndex + 2 < allSegments.length) {
-           const next2 = getSegmentLang(allSegments[currentIndex + 2].text);
-           if (next2 !== 'neutral') foundLang = next2;
-      }
-
-      // Look behind 1
-      if (foundLang === 'neutral' && currentIndex - 1 >= 0) {
-           const prev = getSegmentLang(allSegments[currentIndex - 1].text);
-           if (prev !== 'neutral') foundLang = prev;
-      }
-
-      // Look behind 2
-      if (foundLang === 'neutral' && currentIndex - 2 >= 0) {
-           const prev2 = getSegmentLang(allSegments[currentIndex - 2].text);
-           if (prev2 !== 'neutral') foundLang = prev2;
+      for (const idx of indices) {
+          if (idx >= 0 && idx < allSegments.length && foundLang === 'neutral') {
+              const lang = getSegmentLang(allSegments[idx].text);
+              if (lang !== 'neutral') foundLang = lang;
+          }
       }
 
       return foundLang;
@@ -279,12 +264,10 @@ export const useSpeechSynthesis = () => {
 
     // Helper to find voice with gender preference
     const findVoice = (matcher: (v: SpeechSynthesisVoice) => boolean) => {
-        // Try to match specific language AND same gender first
         if (preferredGender !== 'unknown') {
             const genderMatch = availableVoices.find(v => matcher(v) && getVoiceGender(v) === preferredGender);
             if (genderMatch) return genderMatch;
         }
-        // Fallback to just matching language
         return availableVoices.find(matcher);
     };
 
@@ -308,12 +291,9 @@ export const useSpeechSynthesis = () => {
             }
             
             if (!targetVoice) {
-                // Priority: Mandarin matching gender -> Any Mandarin (excluding HK/Yue)
                 targetVoice = findVoice(v => {
                     const l = normalizeLang(v.lang);
-                    // Match generic zh or cmn, but EXCLUDE hk/yue
                     const isMandarin = (l.startsWith('zh') || l.startsWith('cmn')) && l !== 'zh-hk' && !l.includes('yue');
-                    // Special preference for Meijia if user is unknown/female preference, but handled by findVoice generally
                     return isMandarin;
                 });
             }
@@ -323,15 +303,22 @@ export const useSpeechSynthesis = () => {
             break;
     }
     
-    // 4. Fallback logic
     if (!targetVoice && langType !== 'neutral') {
         if (langType === 'yue') targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('zh'));
     }
 
     const finalVoice = targetVoice || userPreferredVoiceRef.current;
 
-    // 5. Sanitize text for audio (remove noisy punctuation AND emojis) 
-    const speakText = sanitizeForSpeech(segment.text);
+    // 5. Pre-process text (High Accuracy Dates + Sanitization)
+    let speakText = segment.text;
+
+    // Enhance Date Reading: Convert 2026-01-30 to Natural Speech for CJK
+    if (['zh', 'yue', 'ja'].includes(langType)) {
+        speakText = speakText.replace(/(\d{4})-(\d{2})-(\d{2})/g, '$1年$2月$3日');
+    }
+
+    // Sanitize punctuation (but keep date hyphens and negative numbers)
+    speakText = sanitizeForSpeech(speakText);
 
     const utterance = new SpeechSynthesisUtterance(speakText);
     if (finalVoice) {
@@ -417,7 +404,6 @@ export const useSpeechSynthesis = () => {
     });
   }, []);
 
-  // Wrap manual selection to update the ref
   const handleSetSelectedVoice = useCallback((voice: SpeechSynthesisVoice) => {
     setSelectedVoice(voice);
     userPreferredVoiceRef.current = voice;
