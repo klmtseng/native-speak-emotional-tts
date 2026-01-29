@@ -1,4 +1,15 @@
 
+/**
+ * NativeSpeak Core Speech Engine
+ * 
+ * SECURITY & PRIVACY NOTICE:
+ * This module relies EXCLUSIVELY on the browser's native `window.speechSynthesis` API.
+ * 
+ * - NO external API calls (No Gemini, No OpenAI, No Cloud).
+ * - NO data collection or telemetry.
+ * - ALL processing (regex segmentation, language detection) runs locally on the device.
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TTSSettings, TTSState } from '../types';
 
