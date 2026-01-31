@@ -45,29 +45,52 @@ export const useSpeechSynthesis = () => {
   const getVoiceGender = (voice: SpeechSynthesisVoice): Gender => {
     const name = voice.name.toLowerCase();
     
-    // 1. Explicit labels
+    // 1. Explicit labels (Common in Android / Web standards)
     if (name.includes('female') || name.includes('woman') || name.includes('girl')) return 'female';
     if (name.includes('male') || name.includes('man') || name.includes('boy')) return 'male';
 
-    // 2. iOS / macOS / Apple Specific Names
+    // 2. Microsoft Windows Specific (Common Names)
+    // Taiwan: Hanhan, Yating (Female), Zhiwei (Male)
+    // China: Huihui, Hanhan(Legacy), Yaoyao (Female), Kangkang (Male)
+    // Japan: Haruka, Ayumi, Ichika (Female), Ichiro (Male)
+    const msFemales = ['zira', 'huihui', 'hanhan', 'yaoyao', 'yating', 'haruka', 'ayumi', 'ichika', 'riko'];
+    const msMales = ['david', 'mark', 'kangkang', 'zhiwei', 'ichiro', 'keita'];
+    
+    if (msFemales.some(n => name.includes(n))) return 'female';
+    if (msMales.some(n => name.includes(n))) return 'male';
+
+    // 3. Apple (iOS / macOS) Specific Names
+    // iOS provides only names like "Samantha" without gender metadata.
     const appleFemales = [
-        'samantha', 'karen', 'tessa', 'moira', 'veena', 'fiona',   
-        'ting-ting', 'meijia', 'sin-ji', 'shu-han',               
-        'kyoko', 'otoya',                                         
+        // English
+        'samantha', 'karen', 'tessa', 'moira', 'veena', 'fiona', 'ava', 'noelle', 'allison', 'susan', 'vicki', 'agnes', 'kathy', 'princess', 'victoria', 'zoey', 'nikki',
+        // Chinese (Mandarin/Cantonese)
+        'ting-ting', 'meijia', 'sin-ji', 'shu-han', 'li-mu', 'yu-shu', 'ya-ling', 'hiu-ga', 'akemi',
+        // Japanese
+        'kyoko', 'otoya', 'kasumi',
+        // International
         'amelie', 'anna', 'carmit', 'lekha', 'mariska', 'melina', 
         'monica', 'nora', 'paulina', 'satu', 'yuna', 'zosia', 'zuzana', 'sara', 
-        'alice', 'aurora', 'joana', 'alva', 'kanya', 'yuri'       
+        'alice', 'aurora', 'joana', 'alva', 'kanya', 'yuri', 'milena', 'yara', 'luciana', 'paola'
     ];
 
     const appleMales = [
-        'daniel', 'fred', 'gordon', 'rishi', 'xander',            
-        'kangkang', 
+        // English
+        'daniel', 'fred', 'gordon', 'rishi', 'xander', 'nathan', 'evan', 'noah', 'tom', 'ralph', 'junior', 'bruce', 'alex',
+        // Chinese
+        'kangkang', 'ki-ang', 'zhiwei',
+        // Japanese
         'hattori', 
-        'aaron', 'arthur', 'jorge', 'juan', 'maged', 'martin', 'thomas'
+        // International
+        'aaron', 'arthur', 'jorge', 'juan', 'maged', 'martin', 'thomas', 'felipe', 'diego', 'luca'
     ];
 
-    if (appleFemales.some(n => name.includes(n))) return 'female';
-    if (appleMales.some(n => name.includes(n))) return 'male';
+    // Check exact matches or "Siri [Name]" matches
+    const isAppleFemale = appleFemales.some(n => name === n || name.includes(` ${n}`) || name.startsWith(`${n} `));
+    if (isAppleFemale) return 'female';
+
+    const isAppleMale = appleMales.some(n => name === n || name.includes(` ${n}`) || name.startsWith(`${n} `));
+    if (isAppleMale) return 'male';
 
     return 'unknown';
   };
@@ -105,12 +128,28 @@ export const useSpeechSynthesis = () => {
         setVoices(availableVoices);
         
         if (!selectedVoice) {
-            const meijiaVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia'));
+            // Prioritize TAIWAN (zh-TW) voices over Mainland (zh-CN)
+            
+            // 1. Taiwan Specific Names
+            const meijiaVoice = availableVoices.find(v => v.name.toLowerCase().includes('meijia')); // Apple TW
+            const hanhanVoice = availableVoices.find(v => v.name.toLowerCase().includes('hanhan')); // Windows TW
+            const yatingVoice = availableVoices.find(v => v.name.toLowerCase().includes('yating')); // Windows TW
+            const genericTwVoice = availableVoices.find(v => normalizeLang(v.lang) === 'zh-tw');
+
+            // 2. Mainland Fallbacks
+            const huihuiVoice = availableVoices.find(v => v.name.toLowerCase().includes('huihui')); // Windows CN
+            const googleVoice = availableVoices.find(v => v.name.includes('Google') && v.lang.startsWith('zh')); // Android
+            
             const defaultVoice = 
                 meijiaVoice ||
+                hanhanVoice ||
+                yatingVoice ||
+                genericTwVoice ||
+                huihuiVoice ||
+                googleVoice ||
                 availableVoices.find(v => v.default) || 
-                availableVoices.find(v => v.localService) ||
                 availableVoices[0];
+            
             setSelectedVoice(defaultVoice);
             userPreferredVoiceRef.current = defaultVoice;
         }
@@ -119,6 +158,7 @@ export const useSpeechSynthesis = () => {
 
     loadVoices();
     
+    // Chrome/Android needs this event, Safari sometimes loads immediately
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
@@ -276,9 +316,16 @@ export const useSpeechSynthesis = () => {
     // Helper to find voice with gender preference
     const findVoice = (matcher: (v: SpeechSynthesisVoice) => boolean) => {
         if (preferredGender !== 'unknown') {
+            // Try to find exact gender match first
             const genderMatch = availableVoices.find(v => matcher(v) && getVoiceGender(v) === preferredGender);
             if (genderMatch) return genderMatch;
         }
+        
+        // Fallback: If no gender match, try to find the 'default' voice for this language
+        const defaultForLang = availableVoices.find(v => matcher(v) && v.default);
+        if (defaultForLang) return defaultForLang;
+
+        // Final fallback: any voice that matches the language
         return availableVoices.find(matcher);
     };
 
@@ -293,14 +340,21 @@ export const useSpeechSynthesis = () => {
             });
             break;
         case 'zh': // Mandarin
-            // Check preferred voice first
+            // Check preferred voice first if it matches language
             if (userPreferredVoiceRef.current) {
                 const prefLang = normalizeLang(userPreferredVoiceRef.current.lang);
-                if (prefLang === 'zh-hk' || prefLang.includes('yue')) {
+                // Ensure we don't accidentally pick a Cantonese voice for Mandarin, or vice versa
+                if ((prefLang.startsWith('zh') || prefLang.startsWith('cmn')) && !prefLang.includes('yue') && prefLang !== 'zh-hk') {
                    targetVoice = userPreferredVoiceRef.current;
                 }
             }
             
+            // Prioritize Taiwan (zh-TW)
+            if (!targetVoice) {
+                 targetVoice = findVoice(v => normalizeLang(v.lang) === 'zh-tw');
+            }
+
+            // Fallback to any Mandarin
             if (!targetVoice) {
                 targetVoice = findVoice(v => {
                     const l = normalizeLang(v.lang);
@@ -314,8 +368,9 @@ export const useSpeechSynthesis = () => {
             break;
     }
     
-    if (!targetVoice && langType !== 'neutral') {
-        if (langType === 'yue') targetVoice = availableVoices.find(v => normalizeLang(v.lang).startsWith('zh'));
+    // Fallback for Cantonese: If no Cantonese voice, use Mandarin but try to match gender
+    if (!targetVoice && langType === 'yue') {
+         targetVoice = findVoice(v => normalizeLang(v.lang).startsWith('zh'));
     }
 
     const finalVoice = targetVoice || userPreferredVoiceRef.current;
@@ -372,6 +427,7 @@ export const useSpeechSynthesis = () => {
       setTimeout(playNext, 0);
     };
 
+    // CRITICAL for iOS: Prevent garbage collection of the utterance
     (window as any)._activeTTSUtterance = utterance;
     activeUtteranceRef.current = utterance;
     
