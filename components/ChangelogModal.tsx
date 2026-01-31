@@ -23,6 +23,25 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
+    version: 'v1.3.8',
+    date: '2026-01-31',
+    title: 'Taiwan First',
+    features: [
+      '台灣口音優先 (Taiwan Priority)：系統現在會強制優先選用「台灣中文」語音包 (如 Microsoft Hanhan, Yating, Apple Meijia) 作為預設值，不再預設使用中國口音 (Huihui)。',
+      '語音資料庫擴充 (Extended Voice DB)：新增對 Windows 台灣語音 "Yating" 與 "Zhiwei" 的識別支援。',
+    ]
+  },
+  {
+    version: 'v1.3.7',
+    date: '2026-01-30',
+    title: 'Cross-Platform Gender Sync',
+    features: [
+      'iOS/iPhone 性別同步修復：解決了 iOS 裝置上，英文語音無法正確識別性別（導致從中文女聲切換到英文時變成男聲）的問題。我們擴充了大量 Apple 語音名稱資料庫（包含 Samantha, Ava, Noelle 等）。',
+      'Windows 語音相容性增強：手動加入了常見的 Windows 語音名稱（如 Zira, Huihui, David），確保跨平台的一致性體驗。',
+      '智慧預設語音 (Smart Fallback)：當找不到完全匹配的語音時，系統現在會優先選擇該語言的「系統預設值」，而非列表中的第一個語音。',
+    ]
+  },
+  {
     version: 'v1.3.6',
     date: '2026-01-30',
     title: 'Precision & Stability',
@@ -207,7 +226,7 @@ const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose }) => {
           {/* Bottom Footer */}
            <div className="pt-8 flex items-center justify-center gap-2 text-gray-500 text-xs">
               <GitCommit size={14} />
-              <span>NativeSpeak v1.3.6 (Fully Offline)</span>
+              <span>NativeSpeak v1.3.8 (Fully Offline)</span>
            </div>
         </div>
 
