@@ -1,4 +1,3 @@
-
 import { TTSSettings } from "./types";
 
 export const DEFAULT_SETTINGS: TTSSettings = {
@@ -7,24 +6,24 @@ export const DEFAULT_SETTINGS: TTSSettings = {
   volume: 1.0,
 };
 
-export const DEFAULT_TEXT = `NativeSpeak v1.3.8 Release (2026-01-31)
+export const DEFAULT_TEXT = `NativeSpeak v1.3.9 Release (2026-02-10)
 
-✨ Latest Polish / 最新優化內容：
+✨ 最新說明 / Updated Notes：
 
-1. Taiwan First (台灣優先) 🇹🇼
-   "No more Mainland accent by default! The system now prioritizes Taiwan voices (Hanhan, Yating)."
-   "不再預設中國口音！系統現在優先選用台灣口音（如 Hanhan, Yating, Meijia）。"
+1. Cross-Browser QA Validation (跨瀏覽器驗證) 🌐
+   "Completed smoke tests on Chromium, Firefox, and WebKit."
+   "已完成 Chromium、Firefox、WebKit 的基本流程驗證（載入、匯入、拖放）。"
 
-2. iOS Gender Fix (iOS 性別同步) 🧑‍🤝‍🧑
-   "Now switching from Chinese to English on iPhone maintains the female voice correctly."
-   "修復了 iOS 上切換語言時會變成男生聲音的問題。"
+2. Playback Behavior Note (播放行為說明) 🔊
+   "Voice availability depends on browser and OS."
+   "語音可用數量會依瀏覽器與作業系統而不同；若沒有 voices，播放可能不會啟動。"
 
-3. Smart Segmentation (智慧分詞修復) ✂️
-   "No more stuttering on versions like v1.3.6 or URLs like google.com."
-   "修正了版本號與網址被錯誤切分的問題，朗讀節奏更自然。"
+3. Import Experience (匯入體驗) 📂
+   "You can paste text, upload a file, or drag and drop directly."
+   "可直接貼上文字、按按鈕匯入檔案，或拖放檔案到輸入區。"
 
-4. Smart Dates (智慧日期) 📅
-   "2026-01-31"
-   "中文/粵語/日文模式下，2026-01-31 會被讀作「2026年1月31日」。"
+4. Supported Formats (支援格式) 📝
+   "Supports .txt, .md, .srt, .vtt"
+   "目前支援 .txt、.md、.srt、.vtt。"
 
-(Click Play to test / 按下播放測試)`;
+(Replace this text with your own content / 你可以直接刪除此說明並貼上要朗讀的內容)`;
