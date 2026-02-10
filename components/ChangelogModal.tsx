@@ -23,6 +23,16 @@ interface ChangelogModalProps {
 
 const UPDATES: UpdateEntry[] = [
   {
+    version: 'v1.3.9',
+    date: '2026-02-10',
+    title: 'Cross-Browser QA Validation',
+    features: [
+      '完成跨瀏覽器 smoke test：Chromium、Firefox、WebKit 均完成載入、檔案匯入、拖放匯入流程驗證。',
+      '播放流程實測：在 WebKit 可正常進入播放狀態；Chromium / Firefox 於目前測試環境偵測不到語音包（voice count = 0）時維持待播放狀態。',
+      '新增 QA 測試報告文件，完整記錄測試範圍、結果與限制，方便後續回歸測試與版本追蹤。',
+    ]
+  },
+  {
     version: 'v1.3.8',
     date: '2026-01-31',
     title: 'Taiwan First',
